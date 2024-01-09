@@ -5,13 +5,13 @@ namespace MyGameServer.Reader
 {
     public class Tile
     {
-        public Position Position { get; }
-        public List<Item> Items { get; }
+        //public Position Position { get; }
+        //public List<Item> Items { get; }
 
-        public Tile(Position position)
-        {
-            Position = position;
-            Items = new List<Item>();
-        }
+        //public Tile(Position position)
+        //{
+        //    Position = position;
+        //    Items = new List<Item>();
+        //}
     }
 }

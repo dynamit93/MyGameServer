@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="1" nextlayerid="4" nextobjectid="1">
+ <tileset firstgid="1" source="IceTileset.tsx"/>
+ <layer id="1" name="Tile Layer 1" width="30" height="20">
+  <data encoding="base64" compression="zstd">
+   <chunk x="-16" y="-16" width="16" height="16">
+   KLUv/WAAA7UAACgAKlJTAAUAqSFQAKcgCGwXC0QqdwU=
+  </chunk>
+   <chunk x="0" y="-16" width="16" height="16">
+   KLUv/WAAAy0BAHgAKwAAAFEAAABYAAAAKikIAEEB8EKBhD27GgIaAQPs3OdH5dg=
+  </chunk>
+   <chunk x="-16" y="0" width="16" height="16">
+   KLUv/WAAA50CAMgAKlJAAAAAZmcAUwAAACtUAAAAPj8AjgBSHaBQdXXAgqWgO4moHZIQmcYJHKbmB/ea2DZrDZkecgcyGH38NroDekh1sm36jQ8wD8UzdZ0xCUMB
+  </chunk>
+   <chunk x="0" y="0" width="16" height="16">
+   KLUv/WAAAyUCAOhcAAAAZQAAAGYAAABBAAAAKSsrUQA9AAAAPlUAKQ4gMAI0dgy9VKE2LAUYUro7FwLiZ1pDNASESziVtvCYjbuEu24J
+  </chunk>
+  </data>
+ </layer>
+ <layer id="3" name="Tile Layer 2" width="30" height="20" offsetx="11" offsety="-2">
+  <data encoding="base64" compression="zstd">
+   <chunk x="-16" y="-16" width="16" height="16">
+   KLUv/WAAA30AADAAFwAAAAMCADMNZU/l2A==
+  </chunk>
+   <chunk x="0" y="-16" width="16" height="16">
+   KLUv/WAAA+UAADAAKgABAhUHAOEi7NlhCMJfLcMQJHZwNoZUTgg=
+  </chunk>
+   <chunk x="-16" y="0" width="16" height="16">
+   KLUv/WAAA40AACgAFgAWAAMAU0GFP0gRpGMD
+  </chunk>
+   <chunk x="0" y="0" width="16" height="16">
+   KLUv/WAAAy0BAFgABAABAAIAFRYVAAmAkNoD60AHK4KUQ5A87vpqfXC2B1Q6BwM=
+  </chunk>
+  </data>
+ </layer>
+</map>

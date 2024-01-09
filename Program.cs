@@ -6,52 +6,137 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
+using System.Text.RegularExpressions;
+using System.Xml;
 using MyGameServer.Reader;
+using System.Reflection.PortableExecutable;
+using TiledSharp;
+using ZstdNet;
+
 class Program
 {
-    static void Main(string[] args)
+
+
+    public static Dictionary<int, string> ParseItemsXml(string filePath)
     {
-        string fileName = "forgotten.otbm"; // Replace with your OTBM file path
-        OTBMReader otbmReader = new OTBMReader(fileName);
-        otbmReader.ReadOTBMFile();
+        var items = new Dictionary<int, string>();
 
-        // Create an instance of your Game class (assuming it contains the Map and Houses data)
-        Game game = new Game();
+        XmlDocument doc = new XmlDocument();
+        doc.Load(filePath);
 
-        // Create an instance of IOMapSerialize and load house items
-        IOMapSerialize mapSerializer = new IOMapSerialize(game);
-        mapSerializer.LoadHouseItems(game.Map);
+        XmlNodeList itemList = doc.DocumentElement.SelectNodes("/items/item");
+        foreach (XmlNode item in itemList)
+        {
+            
+            string element = item.OuterXml.ToString();
+            if (element.Contains("fromid="))
+            {
+                var fromIdRegex = new Regex(@"fromid=""(\d+)""");
+                var toIdRegex = new Regex(@"toid=""(\d+)""");
+                var nameRegex = new Regex(@"name=""([^""]*)""");
 
-        // Print all tiles on the map
-        PrintAllTiles(game.Map);
+                var fromIdMatch = fromIdRegex.Match(element);
+                var toIdMatch = toIdRegex.Match(element);
+                var nameMatch = nameRegex.Match(element);
+
+                if (fromIdMatch.Success && toIdMatch.Success && nameMatch.Success)
+                {
+                    int fromId = int.Parse(fromIdMatch.Groups[1].Value);
+                    int toId = int.Parse(toIdMatch.Groups[1].Value);
+                    string name = nameMatch.Groups[1].Value;
+                    
+                    for(int i = fromId; i <= toId; i++)
+                    {
+                        items[i] = name;
+                    }
+                }
+                continue;
+
+            }
+            if (element.Contains("<article")) continue;
+            if (element.Contains("<item id="))
+            {
+                var idRegex = new Regex(@"id=""(\d+)""");
+                var nameRegex = new Regex(@"name=""([^""]*)""");
+
+                var idMatch = idRegex.Match(element);
+                var nameMatch = nameRegex.Match(element);
+
+                if (idMatch.Success && nameMatch.Success)
+                {
+                    int id = int.Parse(idMatch.Groups[1].Value);
+                    string name = nameMatch.Groups[1].Value;
+                    items[id] = name;
+                }
+                continue;
+            }
+        }
+
+        return items;
+    }
+
+
+    public static void Main(string[] args)
+    {
+        string tmxFilePath = @"C:\Users\dennis\source\repos\MyGameServer\Data\World\map.tmx";
+
+        if (!File.Exists(tmxFilePath))
+        {
+            Console.WriteLine("TMX file not found.");
+            return;
+        }
+
+        XmlDocument doc = new XmlDocument();
+        doc.Load(tmxFilePath);
+
+        XmlNodeList chunkList = doc.DocumentElement.SelectNodes("//layer/data/chunk");
+
+        foreach (XmlNode chunkNode in chunkList)
+        {
+            string base64CompressedData = chunkNode.InnerText.Trim();
+
+            try
+            {
+                byte[] decompressedData = DecompressBase64ZstdData(base64CompressedData);
+
+                // Process 'decompressedData' as needed
+                PrintDecompressedData(decompressedData);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during decompression: {ex.Message}");
+            }
+        }
+
 
         // Start the server after reading the OTBM file and loading house items
         SimpleTcpServer server = new SimpleTcpServer(1300);
         server.Start();
     }
-
-
-
-
-    static void PrintAllTiles(Map map)
+    private static byte[] DecompressBase64ZstdData(string base64CompressedData)
     {
-        foreach (House house in map.Houses)
+        byte[] compressedData = Convert.FromBase64String(base64CompressedData);
+
+        using (var decompressor = new Decompressor())
         {
-            foreach (HouseTile tile in house.Tiles)
-            {
-                Console.WriteLine($"HouseTile - X: {tile.Position.X}, Y: {tile.Position.Y}, Z: {tile.Position.Z}");
-                PrintItemsOnTile(tile);
-            }
+            return decompressor.Unwrap(compressedData);
         }
     }
 
-    static void PrintItemsOnTile(HouseTile tile)
+    private static void PrintDecompressedData(byte[] data)
     {
-        foreach (Item item in tile.Items)
+        StringBuilder sb = new StringBuilder();
+
+        // Limit the number of bytes to print to avoid overwhelming the console
+        int bytesToPrint = Math.Min(data.Length, 100);
+        for (int i = 0; i < bytesToPrint; i++)
         {
-            Console.WriteLine($"Item ID: {item.ID}");
+            sb.AppendFormat("{0:X2} ", data[i]);
         }
+
+        Console.WriteLine("Decompressed Data (Hex): " + sb.ToString());
     }
+
 }
 
 
