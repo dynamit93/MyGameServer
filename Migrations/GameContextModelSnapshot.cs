@@ -48,6 +48,9 @@ namespace MyGameServer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
+                    b.Property<int>("AccountId")
+                        .HasColumnType("int");
+
                     b.Property<long>("Balance")
                         .HasColumnType("bigint");
 
@@ -151,6 +154,8 @@ namespace MyGameServer.Migrations
 
                     b.HasKey("PlayerId");
 
+                    b.HasIndex("AccountId");
+
                     b.ToTable("Players");
                 });
 
@@ -181,6 +186,17 @@ namespace MyGameServer.Migrations
                     b.HasIndex("PlayerId");
 
                     b.ToTable("PlayerItems");
+                });
+
+            modelBuilder.Entity("MyGameServer.player.Player", b =>
+                {
+                    b.HasOne("MyGameServer.player.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("MyGameServer.player.Player_Items", b =>

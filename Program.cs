@@ -12,6 +12,9 @@ using MyGameServer.Reader;
 using System.Reflection.PortableExecutable;
 using TiledSharp;
 using ZstdNet;
+using MyGameServer;
+using MyGameServer.player;
+using System.Numerics;
 
 class Program
 {
@@ -79,6 +82,8 @@ class Program
     public static void Main(string[] args)
     {
         string tmxFilePath = @"C:\Users\dennis\source\repos\MyGameServer\Data\World\map.tmx";
+        var dbContext = new GameContext();
+
 
         if (!File.Exists(tmxFilePath))
         {
@@ -110,7 +115,7 @@ class Program
 
 
         // Start the server after reading the OTBM file and loading house items
-        SimpleTcpServer server = new SimpleTcpServer(1300);
+        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext);
         server.Start();
     }
     private static byte[] DecompressBase64ZstdData(string base64CompressedData)
@@ -143,10 +148,11 @@ class Program
 class SimpleTcpServer
 {
     private TcpListener tcpListener;
-
-    public SimpleTcpServer(int port)
+    private GameContext dbContext;
+    public SimpleTcpServer(int port, GameContext dbContext)
     {
         tcpListener = new TcpListener(IPAddress.Loopback, port);
+        this.dbContext = dbContext;
     }
 
     public void Start()
@@ -180,31 +186,21 @@ class SimpleTcpServer
             {
                 Console.WriteLine("Client authenticated.");
 
-                // Process login request and validate credentials
-                bool isValidLogin = ProcessLoginRequest(networkStream);
+                // Fetch all players from the database
+                var players = dbContext.Players.ToList();
 
-                if (isValidLogin)
+                // Create a string with all players' information
+                StringBuilder playersInfo = new StringBuilder();
+                foreach (var player in players)
                 {
-                    // Continue handling the client, read and process data here
-                    while (true)
-                    {
-                        bytesRead = networkStream.Read(buffer, 0, buffer.Length);
-                        if (bytesRead == 0)
-                        {
-                            Console.WriteLine("Client disconnected.");
-                            break;
-                        }
-
-                        string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        Console.WriteLine($"Received data from client: {receivedData}");
-
-                        // Handle the received data as needed
-                    }
+                    playersInfo.AppendLine($"Player: {player.Name}, Level: {player.Level}, Balance: {player.Balance}");
+                    Console.WriteLine(playersInfo);
                 }
-                else
-                {
-                    Console.WriteLine("Login failed. Closing connection.");
-                }
+
+                // Send the players' information to the client
+                string responseData = playersInfo.ToString();
+                byte[] responseBytes = Encoding.UTF8.GetBytes(responseData);
+                networkStream.Write(responseBytes, 0, responseBytes.Length);
             }
             else
             {
@@ -222,7 +218,10 @@ class SimpleTcpServer
     }
 
 
-    private bool ProcessLoginRequest(NetworkStream networkStream)
+
+
+
+    private (bool isValidLogin, Player player) ProcessLoginRequest(NetworkStream networkStream)
     {
         // Read the login request (e.g., username and password) from the client
         byte[] buffer = new byte[1024];
@@ -234,22 +233,39 @@ class SimpleTcpServer
         if (loginInfo.Length != 3 || loginInfo[0] != "LOGIN")
         {
             // Invalid login request format
-            return false;
+            return (false, null);
         }
 
         string username = loginInfo[1];
         string password = loginInfo[2];
 
-        // Validate the username and password (you should implement your validation logic here)
-        bool isValid = ValidateCredentials(username, password);
+        // Validate the username and password against the database
+        LoginManager loginManager = new LoginManager(dbContext);
+        var (isValid, playerName) = loginManager.ValidateUserLogin(username, password);
 
-        // Send a response to the client indicating whether the login was successful
-        string response = isValid ? "LOGIN_SUCCESS" : "LOGIN_FAILURE";
-        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-        networkStream.Write(responseBytes, 0, responseBytes.Length);
+        if (isValid)
+        {
+            // Retrieve the Player object based on the playerName
+            Player player = dbContext.Players.FirstOrDefault(p => p.Name == playerName);
+            if (player != null)
+            {
+                // Return true and the Player object
+                return (true, player);
+            }
+        }
 
-        return isValid;
+        // If validation failed or player not found, return false and null
+        return (false, null);
     }
+
+
+
+
+
+
+
+
+
 
     private bool ValidateCredentials(string username, string password)
     {

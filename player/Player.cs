@@ -6,6 +6,14 @@ namespace MyGameServer.player
 {
     public class Player
     {
+
+        // Add foreign key property
+        public int AccountId { get; set; }
+
+        // Navigation property to represent the relationship to the Account entity
+        [ForeignKey("AccountId")]
+        public Account Account { get; set; }
+
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int PlayerId { get; set; }
