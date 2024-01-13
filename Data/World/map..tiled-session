@@ -3,7 +3,7 @@
         "height": 4300,
         "width": 2
     },
-    "activeFile": "IceTileset.tsx",
+    "activeFile": "map.tmx",
     "expandedProjectPaths": [
         "."
     ],
@@ -12,16 +12,20 @@
             "scaleInDock": 1,
             "scaleInEditor": 1
         },
+        "item_1294_snow.tsx": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
         "map.tmx": {
-            "scale": 0.75,
+            "scale": 2,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": -118.66666666666663,
-                "y": -82.66666666666663
+                "x": 112.75,
+                "y": 300.5
             }
         }
     },
-    "last.imagePath": "C:/Users/dennis/Downloads",
+    "last.imagePath": "C:/Users/dennis/Desktop",
     "map.fixedSize": false,
     "map.lastUsedFormat": "tmx",
     "map.layerDataFormat": null,
@@ -31,10 +35,11 @@
     ],
     "project": "map..tiled-project",
     "recentFiles": [
+        "IceTileset.tsx",
         "map.tmx",
-        "IceTileset.tsx"
+        "item_1294_snow.tsx"
     ],
     "tileset.lastUsedFormat": "tsx",
-    "tileset.transparentColor": "#000000",
+    "tileset.transparentColor": "#ff00ff",
     "tileset.useTransparentColor": true
 }

@@ -171,38 +171,45 @@ class SimpleTcpServer
 
         try
         {
-            //using (SslStream sslStream = new SslStream(networkStream, false))
-            //{
-            //    // Load the server certificate
-            //    string certificatePath = "path_to_your_certificate.pfx";
-            //    string certificatePassword = "your_certificate_password";
-            //    X509Certificate serverCertificate = new X509Certificate2(certificatePath, certificatePassword);
-
-            //    // Authenticate as the server
-            //    sslStream.AuthenticateAsServer(serverCertificate, clientCertificateRequired: false, SslProtocols.Tls12, checkCertificateRevocation: true);
-
-            // Read authentication token using sslStream
-            string authToken = "ExpectedAuthToken";
+            string authToken = "ExpectedAuthToken"; // Replace with your expected authentication token
             byte[] buffer = new byte[1024];
-            //int bytesRead = sslStream.Read(buffer, 0, buffer.Length);
             int bytesRead = networkStream.Read(buffer, 0, buffer.Length);
             string receivedToken = Encoding.UTF8.GetString(buffer, 0, bytesRead);
 
-                if (receivedToken == "ExpectedAuthToken")
+            if (receivedToken == authToken)
+            {
+                Console.WriteLine("Client authenticated.");
+
+                // Process login request and validate credentials
+                bool isValidLogin = ProcessLoginRequest(networkStream);
+
+                if (isValidLogin)
                 {
-                    Console.WriteLine("Client authenticated.");
-                    // Continue handling client
+                    // Continue handling the client, read and process data here
+                    while (true)
+                    {
+                        bytesRead = networkStream.Read(buffer, 0, buffer.Length);
+                        if (bytesRead == 0)
+                        {
+                            Console.WriteLine("Client disconnected.");
+                            break;
+                        }
+
+                        string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        Console.WriteLine($"Received data from client: {receivedData}");
+
+                        // Handle the received data as needed
+                    }
                 }
                 else
                 {
-                    Console.WriteLine("Client failed authentication.");
-                    client.Close();
-                    return;
+                    Console.WriteLine("Login failed. Closing connection.");
                 }
-
-                // Further communication using sslStream
-                // ...
-            //}
+            }
+            else
+            {
+                Console.WriteLine("Client failed authentication.");
+            }
         }
         catch (Exception ex)
         {
@@ -215,5 +222,40 @@ class SimpleTcpServer
     }
 
 
+    private bool ProcessLoginRequest(NetworkStream networkStream)
+    {
+        // Read the login request (e.g., username and password) from the client
+        byte[] buffer = new byte[1024];
+        int bytesRead = networkStream.Read(buffer, 0, buffer.Length);
+        string loginRequest = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+
+        // Split the login request into username and password
+        string[] loginInfo = loginRequest.Split(' ');
+        if (loginInfo.Length != 3 || loginInfo[0] != "LOGIN")
+        {
+            // Invalid login request format
+            return false;
+        }
+
+        string username = loginInfo[1];
+        string password = loginInfo[2];
+
+        // Validate the username and password (you should implement your validation logic here)
+        bool isValid = ValidateCredentials(username, password);
+
+        // Send a response to the client indicating whether the login was successful
+        string response = isValid ? "LOGIN_SUCCESS" : "LOGIN_FAILURE";
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        networkStream.Write(responseBytes, 0, responseBytes.Length);
+
+        return isValid;
+    }
+
+    private bool ValidateCredentials(string username, string password)
+    {
+        // Implement your validation logic here (e.g., check against a database)
+        // Return true if valid, false if not
+        return true; // For demonstration purposes, assuming it's valid
+    }
 
 }
