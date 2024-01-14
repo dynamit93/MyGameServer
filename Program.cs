@@ -194,8 +194,10 @@ class SimpleTcpServer
                 foreach (var player in players)
                 {
                     playersInfo.AppendLine($"Player: {player.Name}, Level: {player.Level}, Balance: {player.Balance}");
-                    Console.WriteLine(playersInfo);
                 }
+
+                // Log the data being sent to the client
+                Console.WriteLine($"Data server sending to client: {playersInfo}");
 
                 // Send the players' information to the client
                 string responseData = playersInfo.ToString();
@@ -216,6 +218,7 @@ class SimpleTcpServer
             client.Close();
         }
     }
+
 
 
 
