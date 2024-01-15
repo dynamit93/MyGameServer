@@ -29,4 +29,14 @@
     </Compile>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Reader\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenTibiaCommons\OpenTibiaCommons.csproj" />
+    <ProjectReference Include="..\SharpMapTrackerServer\SharpMapTrackerServer.csproj" />
+    <ProjectReference Include="..\SharpTibiaProxy\SharpTibiaProxy.csproj" />
+  </ItemGroup>
+
 </Project>

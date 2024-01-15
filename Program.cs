@@ -8,108 +8,51 @@ using System.Text;
 using System.Threading;
 using System.Text.RegularExpressions;
 using System.Xml;
-using MyGameServer.Reader;
 using System.Reflection.PortableExecutable;
 using TiledSharp;
 using ZstdNet;
 using MyGameServer;
 using MyGameServer.player;
-using System.Numerics;
+using OpenTibiaCommons.Domain;
+using OpenTibiaCommons.IO;
 
 class Program
 {
 
 
-    public static Dictionary<int, string> ParseItemsXml(string filePath)
-    {
-        var items = new Dictionary<int, string>();
 
-        XmlDocument doc = new XmlDocument();
-        doc.Load(filePath);
-
-        XmlNodeList itemList = doc.DocumentElement.SelectNodes("/items/item");
-        foreach (XmlNode item in itemList)
-        {
-            
-            string element = item.OuterXml.ToString();
-            if (element.Contains("fromid="))
-            {
-                var fromIdRegex = new Regex(@"fromid=""(\d+)""");
-                var toIdRegex = new Regex(@"toid=""(\d+)""");
-                var nameRegex = new Regex(@"name=""([^""]*)""");
-
-                var fromIdMatch = fromIdRegex.Match(element);
-                var toIdMatch = toIdRegex.Match(element);
-                var nameMatch = nameRegex.Match(element);
-
-                if (fromIdMatch.Success && toIdMatch.Success && nameMatch.Success)
-                {
-                    int fromId = int.Parse(fromIdMatch.Groups[1].Value);
-                    int toId = int.Parse(toIdMatch.Groups[1].Value);
-                    string name = nameMatch.Groups[1].Value;
-                    
-                    for(int i = fromId; i <= toId; i++)
-                    {
-                        items[i] = name;
-                    }
-                }
-                continue;
-
-            }
-            if (element.Contains("<article")) continue;
-            if (element.Contains("<item id="))
-            {
-                var idRegex = new Regex(@"id=""(\d+)""");
-                var nameRegex = new Regex(@"name=""([^""]*)""");
-
-                var idMatch = idRegex.Match(element);
-                var nameMatch = nameRegex.Match(element);
-
-                if (idMatch.Success && nameMatch.Success)
-                {
-                    int id = int.Parse(idMatch.Groups[1].Value);
-                    string name = nameMatch.Groups[1].Value;
-                    items[id] = name;
-                }
-                continue;
-            }
-        }
-
-        return items;
-    }
 
 
     public static void Main(string[] args)
     {
-        string tmxFilePath = @"C:\Users\dennis\source\repos\MyGameServer\Data\World\map.tmx";
+
         var dbContext = new GameContext();
 
+        // Load items definitions (if necessary)
+        OtItems items = new OtItems();
+        items.Load("items.otb");
 
-        if (!File.Exists(tmxFilePath))
+        // Initialize OtMap
+        OtMap map = new OtMap(items);
+
+        // Read OTBM file
+        using (OtFileReader otbmReader = new OtFileReader("Thais_War.otbm"))
         {
-            Console.WriteLine("TMX file not found.");
-            return;
+            map.Load(otbmReader, replaceTiles: true);
         }
 
-        XmlDocument doc = new XmlDocument();
-        doc.Load(tmxFilePath);
-
-        XmlNodeList chunkList = doc.DocumentElement.SelectNodes("//layer/data/chunk");
-
-        foreach (XmlNode chunkNode in chunkList)
+        // Iterate through all tiles in the map
+        foreach (var tile in map.Tiles)
         {
-            string base64CompressedData = chunkNode.InnerText.Trim();
 
-            try
+            //Console.WriteLine($"Tile at {tile.Location}:");
+            foreach (var item in tile.Items)
             {
-                byte[] decompressedData = DecompressBase64ZstdData(base64CompressedData);
-
-                // Process 'decompressedData' as needed
-                PrintDecompressedData(decompressedData);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error during decompression: {ex.Message}");
+                if (item.Type.Id == 2471)
+                {
+                    Console.WriteLine($"Tile at {tile.Location}");
+                    Console.WriteLine($" - Item: {item.Type.Id}{item.Type.Name}");
+                }
             }
         }
 
@@ -128,19 +71,7 @@ class Program
         }
     }
 
-    private static void PrintDecompressedData(byte[] data)
-    {
-        StringBuilder sb = new StringBuilder();
 
-        // Limit the number of bytes to print to avoid overwhelming the console
-        int bytesToPrint = Math.Min(data.Length, 100);
-        for (int i = 0; i < bytesToPrint; i++)
-        {
-            sb.AppendFormat("{0:X2} ", data[i]);
-        }
-
-        Console.WriteLine("Decompressed Data (Hex): " + sb.ToString());
-    }
 
 }
 
