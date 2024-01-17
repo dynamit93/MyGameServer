@@ -15,6 +15,7 @@ using MyGameServer;
 using MyGameServer.player;
 using OpenTibiaCommons.Domain;
 using OpenTibiaCommons.IO;
+using Newtonsoft.Json;
 
 class Program
 {
@@ -99,6 +100,31 @@ class SimpleTcpServer
         }
     }
 
+    public string SerializePlayerToJson(Player player)
+    {
+        return JsonConvert.SerializeObject(player);
+    }
+    private Player FetchPlayerData()
+    {
+        // Implement your logic to fetch player data
+        // For example, you might fetch it from the dbContext based on some criteria
+        return dbContext.Players.FirstOrDefault(); // Example: Fetch the first player
+    }
+    private void SendDataToClient(NetworkStream networkStream, Player playerData)
+    {
+        string playerJson = JsonConvert.SerializeObject(new { player = playerData });
+        byte[] jsonDataBytes = Encoding.UTF8.GetBytes(playerJson);
+
+        // Prefix data with length
+        byte[] lengthPrefix = BitConverter.GetBytes(jsonDataBytes.Length);
+        byte[] dataToSend = new byte[lengthPrefix.Length + jsonDataBytes.Length];
+        lengthPrefix.CopyTo(dataToSend, 2);
+        jsonDataBytes.CopyTo(dataToSend, lengthPrefix.Length);
+
+        networkStream.Write(dataToSend, 0, dataToSend.Length);
+    }
+
+
 
 
     private void HandleClient(object obj)
@@ -117,23 +143,13 @@ class SimpleTcpServer
             {
                 Console.WriteLine("Client authenticated.");
 
-                // Fetch all players from the database
-                var players = dbContext.Players.ToList();
 
-                // Create a string with all players' information
-                StringBuilder playersInfo = new StringBuilder();
-                foreach (var player in players)
-                {
-                    playersInfo.AppendLine($"Player: {player.Name}, Level: {player.Level}, Balance: {player.Balance}");
-                }
+                // Example: Fetch the player data (adjust according to your logic)
+                Player playerData = FetchPlayerData(); // Implement this method based on your data retrieval logic
 
-                // Log the data being sent to the client
-                Console.WriteLine($"Data server sending to client: {playersInfo}");
+                // Send the player data to the client
+                SendDataToClient(networkStream, playerData);
 
-                // Send the players' information to the client
-                string responseData = playersInfo.ToString();
-                byte[] responseBytes = Encoding.UTF8.GetBytes(responseData);
-                networkStream.Write(responseBytes, 0, responseBytes.Length);
             }
             else
             {
