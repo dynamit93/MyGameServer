@@ -138,7 +138,7 @@ class SimpleTcpServer
             byte[] buffer = new byte[1024];
             int bytesRead = networkStream.Read(buffer, 0, buffer.Length);
             string receivedToken = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-
+            Console.WriteLine("received token is ", receivedToken);
             if (receivedToken == authToken)
             {
                 Console.WriteLine("Client authenticated.");
@@ -160,10 +160,10 @@ class SimpleTcpServer
         {
             Console.WriteLine($"Exception: {ex.Message}");
         }
-        finally
-        {
-            client.Close();
-        }
+        //finally
+        //{
+        //    client.Close();
+        //}
     }
 
 
