@@ -138,17 +138,23 @@ class SimpleTcpServer
             byte[] buffer = new byte[1024];
             int bytesRead = networkStream.Read(buffer, 0, buffer.Length);
             string receivedToken = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-            Console.WriteLine("received token is ", receivedToken);
             if (receivedToken == authToken)
             {
                 Console.WriteLine("Client authenticated.");
 
+                var (isValidLogin, player) = ProcessLoginRequest(networkStream);
 
+                if (isValidLogin) { 
                 // Example: Fetch the player data (adjust according to your logic)
                 Player playerData = FetchPlayerData(); // Implement this method based on your data retrieval logic
-
+                    Console.WriteLine("playerData: ", playerData.Name);
                 // Send the player data to the client
                 SendDataToClient(networkStream, playerData);
+                }
+                else
+                {
+                    Console.WriteLine("USERNAME OR PASSWORD OR PLAYER DOSE NOT EXIST");
+                }
 
             }
             else
@@ -167,6 +173,16 @@ class SimpleTcpServer
     }
 
 
+    private void SendFramedResponse(NetworkStream networkStream, string response)
+    {
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        byte[] lengthPrefix = BitConverter.GetBytes(responseBytes.Length);
+        byte[] framedResponse = new byte[lengthPrefix.Length + responseBytes.Length];
+        lengthPrefix.CopyTo(framedResponse, 0);
+        responseBytes.CopyTo(framedResponse, lengthPrefix.Length);
+
+        networkStream.Write(framedResponse, 0, framedResponse.Length);
+    }
 
 
 
@@ -183,45 +199,45 @@ class SimpleTcpServer
         if (loginInfo.Length != 3 || loginInfo[0] != "LOGIN")
         {
             // Invalid login request format
+            //return false;
             return (false, null);
         }
 
         string username = loginInfo[1];
         string password = loginInfo[2];
 
-        // Validate the username and password against the database
+        Console.WriteLine(username + ":" + password);
+
+
+        // If validation failed or player not found, return false and null
+
         LoginManager loginManager = new LoginManager(dbContext);
+        //LoginManager loginManager = new LoginManager(dbContext);
         var (isValid, playerName) = loginManager.ValidateUserLogin(username, password);
 
         if (isValid)
         {
+            Console.WriteLine("playerName: ", playerName);
             // Retrieve the Player object based on the playerName
             Player player = dbContext.Players.FirstOrDefault(p => p.Name == playerName);
             if (player != null)
             {
+                Console.WriteLine($"{player.Name}");
                 // Return true and the Player object
                 return (true, player);
             }
         }
 
-        // If validation failed or player not found, return false and null
+
+        // Send a response to the client indicating whether the login was successful
+        string response = isValid ? "LOGIN_SUCCESS" : "LOGIN_FAILURE";
+        SendFramedResponse(networkStream, response);
+        Console.WriteLine("LOGIN_SUCCESS " , "LOGIN_FAILURE ",response);
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        networkStream.Write(responseBytes, 0, responseBytes.Length);
+
         return (false, null);
     }
 
-
-
-
-
-
-
-
-
-
-    private bool ValidateCredentials(string username, string password)
-    {
-        // Implement your validation logic here (e.g., check against a database)
-        // Return true if valid, false if not
-        return true; // For demonstration purposes, assuming it's valid
-    }
 
 }
