@@ -16,13 +16,12 @@ using MyGameServer.player;
 using OpenTibiaCommons.Domain;
 using OpenTibiaCommons.IO;
 using Newtonsoft.Json;
+using System.Drawing;
+using SharpTibiaProxy.Domain;
 
 class Program
 {
-
-
-
-
+    public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
 
     public static void Main(string[] args)
     {
@@ -79,6 +78,8 @@ class Program
 
 class SimpleTcpServer
 {
+    public List<PlayerGame> Players { get; } = new List<PlayerGame>();
+    private GameWorld gameWorld;
     private TcpListener tcpListener;
     private GameContext dbContext;
     public SimpleTcpServer(int port, GameContext dbContext)
@@ -110,10 +111,56 @@ class SimpleTcpServer
         // For example, you might fetch it from the dbContext based on some criteria
         return dbContext.Players.FirstOrDefault(); // Example: Fetch the first player
     }
-    private void SendDataToClient(NetworkStream networkStream, Player playerData)
+    public void SendDataToClient(NetworkStream networkStream, Player playerData)
     {
-        string playerJson = JsonConvert.SerializeObject(new { player = playerData });
+        CustomPlayer customPlayer = new CustomPlayer
+        {
+            PlayerId = playerData.PlayerId,
+            AccountId = playerData.AccountId,
+            Account = playerData.Account,
+            Name = playerData.Name,
+            Level = playerData.Level,
+            Balance = playerData.Balance,
+            Blessings = playerData.Blessings,
+            Cap = playerData.Cap,
+            Experience = playerData.Experience,
+            GroupId = playerData.GroupId,
+            Health = playerData.Health,
+            HealthMax = playerData.HealthMax,
+            LastLogin = playerData.LastLogin,
+            LastLogout = playerData.LastLogout,
+            LookAddons = playerData.LookAddons,
+            LookBody = playerData.LookBody,
+            LookFeet = playerData.LookFeet,
+            LookHead = playerData.LookHead,
+            LookLegs = playerData.LookLegs,
+            Mana = playerData.Mana,
+            ManaMax = playerData.ManaMax,
+            ManaSpent = playerData.ManaSpent,
+            PosX = playerData.PosX,
+            PosY = playerData.PosY,
+            PosZ = playerData.PosZ,
+            Save = playerData.Save,
+            Sex = playerData.Sex,
+            Skills = playerData.Skills
+        };
+
+        string playerJson = JsonConvert.SerializeObject(new { player = customPlayer });
         byte[] jsonDataBytes = Encoding.UTF8.GetBytes(playerJson);
+
+        // Prefix data with length
+        byte[] lengthPrefix = BitConverter.GetBytes(jsonDataBytes.Length);
+        byte[] dataToSend = new byte[lengthPrefix.Length + jsonDataBytes.Length];
+        lengthPrefix.CopyTo(dataToSend, 2);
+        jsonDataBytes.CopyTo(dataToSend, lengthPrefix.Length);
+
+        networkStream.Write(dataToSend, 0, dataToSend.Length);
+    }
+
+    public void SendDataToClientInGame(NetworkStream networkStream, object gameData)
+    {
+        string gameDataJson = JsonConvert.SerializeObject(gameData);
+        byte[] jsonDataBytes = Encoding.UTF8.GetBytes(gameDataJson);
 
         // Prefix data with length
         byte[] lengthPrefix = BitConverter.GetBytes(jsonDataBytes.Length);
@@ -131,6 +178,19 @@ class SimpleTcpServer
     {
         TcpClient client = (TcpClient)obj;
         NetworkStream networkStream = client.GetStream();
+        
+
+    // Create a new PlayerGame object for the connected client
+        PlayerGame Playeringame = new PlayerGame(gameWorld);
+        Playeringame.NetworkStream = networkStream;
+
+        // Add the player to the list of players
+        Players.Add(Playeringame); // Assuming 'players' is accessible here
+
+        // Define and initialize player input object here
+        // Replace this with the actual way you receive player input
+       /* PlayerGame playerInput = new PlayerGame();*/ // Create your player input object
+
 
         try
         {
@@ -147,12 +207,38 @@ class SimpleTcpServer
                 if (isValidLogin) { 
                 // Example: Fetch the player data (adjust according to your logic)
                 Player playerData = FetchPlayerData(); // Implement this method based on your data retrieval logic
-                    Console.WriteLine("playerData: ", playerData.Name);
+                Console.WriteLine("playerData: ", playerData.Name);
                 // Send the player data to the client
                 SendDataToClient(networkStream, playerData);
+
+                    //if(player.LastLogin > player.LastLogout)
+                    //{
+                    //    SendDataToClientInGame(Playeringame, );
+                    //}
+
+                    while (true)
+                    {
+                        string input = ReadPlayerInputFromNetwork(Playeringame);
+                        // Example of handling movement input
+                        if (Playeringame.IsMoveCommand(input))
+                        {
+                            Point newPlayerPosition = Playeringame.CalculateNewPosition(Playeringame.Position, Playeringame.GetDirectionFromInput(input));
+
+                            Playeringame.MoveTo(newPlayerPosition);
+                        }
+
+                        // Other game logic
+
+                        // Sleep or control frame rate (optional)
+                        Thread.Sleep(16); // Sleep for approximately 60 frames per second
+                    }
+
+
+
                 }
                 else
                 {
+                    Console.WriteLine();
                     Console.WriteLine("USERNAME OR PASSWORD OR PLAYER DOSE NOT EXIST");
                 }
 
@@ -166,11 +252,40 @@ class SimpleTcpServer
         {
             Console.WriteLine($"Exception: {ex.Message}");
         }
-        //finally
-        //{
-        //    client.Close();
-        //}
+        finally
+        {
+            client.Close();
+            Players.Remove(Playeringame);
+        }
     }
+
+    // You should replace this method with your actual input reading mechanism
+    private string ReadPlayerInputFromNetwork(PlayerGame playerInGame)
+    {
+        try
+        {
+            byte[] buffer = new byte[1024];
+            int bytesRead = playerInGame.NetworkStream.Read(buffer, 0, buffer.Length);
+
+            if (bytesRead > 0)
+            {
+                return Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            }
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine($"Error reading player input: {ex.Message}");
+        }
+        catch (SocketException ex)
+        {
+            Console.WriteLine($"Socket exception: {ex.Message}");
+            playerInGame.IsConnected = false;
+            // Additional logic for handling player disconnection
+        }
+
+        return "";
+    }
+
 
 
     private void SendFramedResponse(NetworkStream networkStream, string response)
@@ -196,6 +311,12 @@ class SimpleTcpServer
 
         // Split the login request into username and password
         string[] loginInfo = loginRequest.Split(' ');
+        for (int i = 0; i < loginInfo.Length; i++)
+        {
+            Console.WriteLine(loginInfo[i]);
+        }
+
+
         if (loginInfo.Length != 3 || loginInfo[0] != "LOGIN")
         {
             // Invalid login request format
