@@ -18,6 +18,8 @@ using OpenTibiaCommons.IO;
 using Newtonsoft.Json;
 using System.Drawing;
 using SharpTibiaProxy.Domain;
+using MyGameServer.player;
+using ClientCreature = MyGameServer.player.ClientCreature;
 
 class Program
 {
@@ -113,13 +115,13 @@ class SimpleTcpServer
     }
     public void SendDataToClient(NetworkStream networkStream, Player playerData)
     {
+
         CustomPlayer customPlayer = new CustomPlayer
         {
             PlayerId = playerData.PlayerId,
             AccountId = playerData.AccountId,
-            Account = playerData.Account,
             Name = playerData.Name,
-            Level = playerData.Level,
+           // Level = playerData.Level,
             Balance = playerData.Balance,
             Blessings = playerData.Blessings,
             Cap = playerData.Cap,
@@ -142,20 +144,43 @@ class SimpleTcpServer
             PosZ = playerData.PosZ,
             Save = playerData.Save,
             Sex = playerData.Sex,
-            Skills = playerData.Skills
+            Level = new ClientSkill("Level", playerData.Level),
+            //MagicLevel = new ClientSkill("Magic Level"), // Populate with actual magic level if available
+            Skills = new Dictionary<string, ClientSkill>
+
+
+
+            {
+                { "SkillAxe", new ClientSkill("Axe Fighting", playerData.SkillAxe) },
+                { "SkillClub", new ClientSkill("Club Fighting", playerData.SkillClub) },
+                // ... add other skills ...
+            }
         };
+        ClientCreature creature = new ClientCreature
+        {
+            CreatureID = playerData.PlayerId,
+            CreatureName = playerData.Name,
+            Name = playerData.Name,
+            
+        };
+        var dataToSendObject = new
+        {
+            player = customPlayer,
+            Creature = creature
+        };
+        string json = JsonConvert.SerializeObject(dataToSendObject);
+        byte[] jsonDataBytes = Encoding.UTF8.GetBytes(json);
 
-        string playerJson = JsonConvert.SerializeObject(new { player = customPlayer });
-        byte[] jsonDataBytes = Encoding.UTF8.GetBytes(playerJson);
-
-        // Prefix data with length
-        byte[] lengthPrefix = BitConverter.GetBytes(jsonDataBytes.Length);
+        // Prefix data with length (excluding the length of the length prefix itself)
+        byte[] lengthPrefix = BitConverter.GetBytes((ushort)jsonDataBytes.Length);
         byte[] dataToSend = new byte[lengthPrefix.Length + jsonDataBytes.Length];
-        lengthPrefix.CopyTo(dataToSend, 2);
+        lengthPrefix.CopyTo(dataToSend, 0);
         jsonDataBytes.CopyTo(dataToSend, lengthPrefix.Length);
 
         networkStream.Write(dataToSend, 0, dataToSend.Length);
     }
+
+
 
     public void SendDataToClientInGame(NetworkStream networkStream, object gameData)
     {
