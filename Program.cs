@@ -20,17 +20,16 @@ using System.Drawing;
 using SharpTibiaProxy.Domain;
 using MyGameServer.player;
 using ClientCreature = MyGameServer.player.ClientCreature;
+using Newtonsoft.Json.Linq;
 
 class Program
 {
     public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
 
-    public static void Main(string[] args)
+
+    public static OtMap LoadMap()
     {
-
-        var dbContext = new GameContext();
-
-        // Load items definitions (if necessary)
+        // Load items definitions
         OtItems items = new OtItems();
         items.Load("items.otb");
 
@@ -43,24 +42,47 @@ class Program
             map.Load(otbmReader, replaceTiles: true);
         }
 
-        // Iterate through all tiles in the map
-        foreach (var tile in map.Tiles)
-        {
+        return map;
+    }
 
-            //Console.WriteLine($"Tile at {tile.Location}:");
-            foreach (var item in tile.Items)
-            {
-                if (item.Type.Id == 2471)
-                {
-                    Console.WriteLine($"Tile at {tile.Location}");
-                    Console.WriteLine($" - Item: {item.Type.Id}{item.Type.Name}");
-                }
-            }
-        }
+    public static void Main(string[] args)
+    {
+
+        var dbContext = new GameContext();
+        OtMap map = LoadMap();
+        //// Load items definitions (if necessary)
+        //OtItems items = new OtItems();
+        //items.Load("items.otb");
+
+        //// Initialize OtMap
+        //OtMap map = new OtMap(items);
+
+        //// Read OTBM file
+        //using (OtFileReader otbmReader = new OtFileReader("Thais_War.otbm"))
+        //{
+        //    map.Load(otbmReader, replaceTiles: true);
+        //}
+
+        //// Iterate through all tiles in the map
+        //foreach (var tile in map.Tiles)
+        //{
+
+        //    //Console.WriteLine($"Tile at {tile.Location}:");
+        //    foreach (var item in tile.Items)
+        //    {
+        //        if (item.Type.Id == 2471)
+        //        {
+        //            Console.WriteLine($"Tile at {tile.Location}");
+        //            Console.WriteLine($" - Item: {item.Type.Id}{item.Type.Name}");
+        //        }
+        //    }
+        //}
+
+
 
 
         // Start the server after reading the OTBM file and loading house items
-        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext);
+        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext,map);
         server.Start();
     }
     private static byte[] DecompressBase64ZstdData(string base64CompressedData)
@@ -84,10 +106,12 @@ class SimpleTcpServer
     private GameWorld gameWorld;
     private TcpListener tcpListener;
     private GameContext dbContext;
-    public SimpleTcpServer(int port, GameContext dbContext)
+    private OtMap map;
+    public SimpleTcpServer(int port, GameContext dbContext, OtMap map)
     {
         tcpListener = new TcpListener(IPAddress.Loopback, port);
         this.dbContext = dbContext;
+        this.map = map;
     }
 
     public void Start()
@@ -100,6 +124,121 @@ class SimpleTcpServer
             TcpClient client = tcpListener.AcceptTcpClient();
             Console.WriteLine("Client connected.");
             ThreadPool.QueueUserWorkItem(HandleClient, client);
+        }
+    }
+
+    private const int BufferSize = 40024;
+    public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
+    {
+        try
+        {
+            // Filter the map data based on player position
+            var filteredMapTiles = FilterMapData(mapData, playerData);
+
+            var mapDataObject = new
+            {
+                Type = "MapData",
+                Tiles = filteredMapTiles
+            };
+
+            string json = JsonConvert.SerializeObject(mapDataObject);
+            if (!IsValidJson(json))
+            {
+                throw new InvalidOperationException("Invalid JSON data.");
+            }
+
+            byte[] jsonDataBytes = Encoding.UTF8.GetBytes(json);
+            if (jsonDataBytes.Length > BufferSize)
+            {
+                Console.WriteLine("Data too large to send, skipping...");
+                return; // Skip sending if data is too large
+            }
+
+            SendDataInChunks(networkStream, jsonDataBytes);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error in SendMapDataToClient: " + ex.Message);
+        }
+    }
+
+    private List<dynamic> FilterMapData(OtMap mapData, Player playerData)
+    {
+        int rangeX = 20; // Define the range for X coordinate
+        int rangeY = 20; // Define the range for Y coordinate
+        int rangeZ = 2;  // Define the range for Z coordinate (height)
+
+        int minX = playerData.PosX - rangeX;
+        int maxX = playerData.PosX + rangeX;
+        int minY = playerData.PosY - rangeY;
+        int maxY = playerData.PosY + rangeY;
+        int minZ = playerData.PosZ - rangeZ;
+        int maxZ = playerData.PosZ + rangeZ;
+
+        var filteredTiles = mapData.Tiles
+            .Where(tile => tile.Location.X >= minX && tile.Location.X <= maxX &&
+                           tile.Location.Y >= minY && tile.Location.Y <= maxY &&
+                           tile.Location.Z >= minZ && tile.Location.Z <= maxZ)
+            .Select(tile => new
+            {
+                Location = tile.Location,
+                Items = tile.Items.Select(item => new { Id = item.Type.Id, Name = item.Type.Name }).ToList()
+            })
+            .Cast<dynamic>() // Cast each element to dynamic
+            .ToList();
+
+        return filteredTiles;
+    }
+
+
+
+    private bool IsValidJson(string strInput)
+    {
+        if (string.IsNullOrWhiteSpace(strInput)) { return false; }
+        strInput = strInput.Trim();
+        if ((strInput.StartsWith("{") && strInput.EndsWith("}")) || // For object
+            (strInput.StartsWith("[") && strInput.EndsWith("]"))) // For array
+        {
+            try
+            {
+                var obj = JToken.Parse(strInput);
+                return true;
+            }
+            catch (JsonReaderException jex)
+            {
+                Console.WriteLine(jex.Message);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    private void SendDataInChunks(NetworkStream networkStream, byte[] dataToSend)
+    {
+        try
+        {
+            int bytesSent = 0;
+            while (bytesSent < dataToSend.Length)
+            {
+                int bytesToSend = Math.Min(dataToSend.Length - bytesSent, 1024); // Send in chunks of 1024 bytes (or less)
+                networkStream.Write(dataToSend, bytesSent, bytesToSend);
+                bytesSent += bytesToSend;
+                Console.WriteLine("Sent bytes: " + bytesSent); // Log bytes sent in each iteration
+            }
+
+            networkStream.Flush();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error sending data in chunks: " + ex.Message);
         }
     }
 
@@ -116,8 +255,10 @@ class SimpleTcpServer
     public void SendDataToClient(NetworkStream networkStream, Player playerData)
     {
 
+
         CustomPlayer customPlayer = new CustomPlayer
         {
+            Type = "PlayerLogin",
             PlayerId = playerData.PlayerId,
             AccountId = playerData.AccountId,
             Name = playerData.Name,
@@ -165,6 +306,7 @@ class SimpleTcpServer
         };
         var dataToSendObject = new
         {
+
             player = customPlayer,
             Creature = creature
         };
@@ -201,11 +343,12 @@ class SimpleTcpServer
 
     private void HandleClient(object obj)
     {
+       // OtMap map = Program.LoadMap();
         TcpClient client = (TcpClient)obj;
         NetworkStream networkStream = client.GetStream();
         
 
-    // Create a new PlayerGame object for the connected client
+        // Create a new PlayerGame object for the connected client
         PlayerGame Playeringame = new PlayerGame(gameWorld);
         Playeringame.NetworkStream = networkStream;
 
@@ -219,12 +362,15 @@ class SimpleTcpServer
 
         try
         {
-            string authToken = "ExpectedAuthToken"; // Replace with your expected authentication token
+            string authToken = "ExpectedAuthToken";
             byte[] buffer = new byte[1024];
             int bytesRead = networkStream.Read(buffer, 0, buffer.Length);
             string receivedToken = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+
+            Console.WriteLine(receivedToken);
             if (receivedToken == authToken)
             {
+
                 Console.WriteLine("Client authenticated.");
 
                 var (isValidLogin, player) = ProcessLoginRequest(networkStream);
@@ -233,7 +379,9 @@ class SimpleTcpServer
                 // Example: Fetch the player data (adjust according to your logic)
                 Player playerData = FetchPlayerData(); // Implement this method based on your data retrieval logic
                 Console.WriteLine("playerData: ", playerData.Name);
-                // Send the player data to the client
+                    // Send the player data to the client
+                    
+                SendMapDataToClient(networkStream,this.map, playerData);
                 SendDataToClient(networkStream, playerData);
 
                     //if(player.LastLogin > player.LastLogout)
@@ -244,6 +392,10 @@ class SimpleTcpServer
                     while (true)
                     {
                         string input = ReadPlayerInputFromNetwork(Playeringame);
+                        if (input == null || input == "") // Check for empty input, indicating disconnection
+                        {
+                            break; // Exit the loop if the client has disconnected
+                        }
                         // Example of handling movement input
                         if (Playeringame.IsMoveCommand(input))
                         {
@@ -258,7 +410,16 @@ class SimpleTcpServer
                         Thread.Sleep(16); // Sleep for approximately 60 frames per second
                     }
 
+                    //// Create and send the PlayerLogin packet
+                    //var playerLoginData = new
+                    //{
+                    //    Type = "PlayerLogin",
+                    //    PlayerId = player.PlayerId,
+                    //    Name = player.Name,
+                    //    // Add other necessary fields
+                    //};
 
+                    //SendDataToClient(networkStream, playerLoginData);
 
                 }
                 else

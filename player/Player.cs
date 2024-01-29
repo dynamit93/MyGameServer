@@ -99,6 +99,7 @@ namespace MyGameServer.player
 
     public class CustomPlayer
     {
+        public string Type { get; set; }
         public int PlayerId { get; set; }
         public int AccountId { get; set; }
         public string Name { get; set; }
