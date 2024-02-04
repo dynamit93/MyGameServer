@@ -37,7 +37,7 @@ class Program
         OtMap map = new OtMap(items);
 
         // Read OTBM file
-        using (OtFileReader otbmReader = new OtFileReader("Thais_War.otbm"))
+        using (OtFileReader otbmReader = new OtFileReader("test.otbm"))
         {
             map.Load(otbmReader, replaceTiles: true);
         }
@@ -127,68 +127,106 @@ class SimpleTcpServer
         }
     }
 
-    private const int BufferSize = 40024;
+    private const int BufferSize = 1024;
     public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
     {
         try
         {
-            // Filter the map data based on player position
             var filteredMapTiles = FilterMapData(mapData, playerData);
 
-            var mapDataObject = new
+            var mapDescriptionPacket = new
             {
-                Type = "MapData",
-                Tiles = filteredMapTiles
+                Type = "MapDescription",
+                Tiles = filteredMapTiles.Select(tile => new
+                {
+                    Location = new { tile.Location.X, tile.Location.Y, tile.Location.Z },
+                    Items = tile.Items.Select(item => new { Id = item.Id, Name = item.Name }).ToList(),
+                    Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
+                }).ToList()
             };
 
-            string json = JsonConvert.SerializeObject(mapDataObject);
-            if (!IsValidJson(json))
-            {
-                throw new InvalidOperationException("Invalid JSON data.");
-            }
-
-            byte[] jsonDataBytes = Encoding.UTF8.GetBytes(json);
-            if (jsonDataBytes.Length > BufferSize)
-            {
-                Console.WriteLine("Data too large to send, skipping...");
-                return; // Skip sending if data is too large
-            }
-
-            SendDataInChunks(networkStream, jsonDataBytes);
+            string jsonPacket = JsonConvert.SerializeObject(mapDescriptionPacket);
+            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+            networkStream.Write(packetBytes, 0, packetBytes.Length);
         }
         catch (Exception ex)
         {
-            Console.WriteLine("Error in SendMapDataToClient: " + ex.Message);
+            Console.WriteLine($"Error: {ex.Message}");
         }
     }
 
-    private List<dynamic> FilterMapData(OtMap mapData, Player playerData)
+    public void SendHeartbeatToClient(NetworkStream networkStream)
     {
-        int rangeX = 20; // Define the range for X coordinate
-        int rangeY = 20; // Define the range for Y coordinate
-        int rangeZ = 2;  // Define the range for Z coordinate (height)
+        try
+        {
+            var heartbeatPacket = new
+            {
+                Type = "Heartbeat",
+                Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+            };
 
+            string jsonPacket = JsonConvert.SerializeObject(heartbeatPacket);
+            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+            networkStream.Write(packetBytes, 0, packetBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+
+
+
+    private List<TileData> FilterMapData(OtMap mapData, Player playerData)
+    {
+        var filteredTiles = new List<TileData>();
+
+        // Define the visibility range around the player
+        int rangeX = 20; // Horizontal visibility range
+        int rangeY = 20; // Vertical visibility range
+        int rangeZ = 2;  // Depth visibility range
+
+        // Calculate the bounds based on the player's position
         int minX = playerData.PosX - rangeX;
         int maxX = playerData.PosX + rangeX;
         int minY = playerData.PosY - rangeY;
         int maxY = playerData.PosY + rangeY;
-        int minZ = playerData.PosZ - rangeZ;
+        int minZ = Math.Max(playerData.PosZ - rangeZ, 0); // Assuming Z cannot be negative
         int maxZ = playerData.PosZ + rangeZ;
 
-        var filteredTiles = mapData.Tiles
-            .Where(tile => tile.Location.X >= minX && tile.Location.X <= maxX &&
-                           tile.Location.Y >= minY && tile.Location.Y <= maxY &&
-                           tile.Location.Z >= minZ && tile.Location.Z <= maxZ)
-            .Select(tile => new
+        foreach (var tile in mapData.Tiles)
+        {
+            if (tile.Location.X >= minX && tile.Location.X <= maxX &&
+                tile.Location.Y >= minY && tile.Location.Y <= maxY &&
+                tile.Location.Z >= minZ && tile.Location.Z <= maxZ)
             {
-                Location = tile.Location,
-                Items = tile.Items.Select(item => new { Id = item.Type.Id, Name = item.Type.Name }).ToList()
-            })
-            .Cast<dynamic>() // Cast each element to dynamic
-            .ToList();
+                // Assuming `Tile` has a similar structure to what you described
+                var tileData = new TileData
+                {
+                    Location = new MapLocation
+                    {
+                        X = tile.Location.X,
+                        Y = tile.Location.Y,
+                        Z = tile.Location.Z
+                    },
+                    Ground = tile.Ground != null ? new GroundData { Id = tile.Ground.Type.Id, Name = tile.Ground.Type.Name } : null
+                };
+
+                foreach (var item in tile.Items)
+                {
+                    tileData.Items.Add(new ItemData { Id = item.Type.Id, Name = item.Type.Name });
+                }
+
+                filteredTiles.Add(tileData);
+            }
+        }
 
         return filteredTiles;
     }
+
+
+
 
 
 
@@ -228,12 +266,10 @@ class SimpleTcpServer
             int bytesSent = 0;
             while (bytesSent < dataToSend.Length)
             {
-                int bytesToSend = Math.Min(dataToSend.Length - bytesSent, 1024); // Send in chunks of 1024 bytes (or less)
+                int bytesToSend = Math.Min(dataToSend.Length - bytesSent, BufferSize);
                 networkStream.Write(dataToSend, bytesSent, bytesToSend);
                 bytesSent += bytesToSend;
-                Console.WriteLine("Sent bytes: " + bytesSent); // Log bytes sent in each iteration
             }
-
             networkStream.Flush();
         }
         catch (Exception ex)
@@ -301,7 +337,6 @@ class SimpleTcpServer
         {
             CreatureID = playerData.PlayerId,
             CreatureName = playerData.Name,
-            Name = playerData.Name,
             
         };
         var dataToSendObject = new
@@ -380,9 +415,10 @@ class SimpleTcpServer
                 Player playerData = FetchPlayerData(); // Implement this method based on your data retrieval logic
                 Console.WriteLine("playerData: ", playerData.Name);
                     // Send the player data to the client
-                    
-                SendMapDataToClient(networkStream,this.map, playerData);
-                SendDataToClient(networkStream, playerData);
+
+                    SendDataToClient(networkStream, playerData);
+                    SendMapDataToClient(networkStream,this.map, playerData);
+                    SendHeartbeatToClient(networkStream);
 
                     //if(player.LastLogin > player.LastLogout)
                     //{
@@ -410,16 +446,7 @@ class SimpleTcpServer
                         Thread.Sleep(16); // Sleep for approximately 60 frames per second
                     }
 
-                    //// Create and send the PlayerLogin packet
-                    //var playerLoginData = new
-                    //{
-                    //    Type = "PlayerLogin",
-                    //    PlayerId = player.PlayerId,
-                    //    Name = player.Name,
-                    //    // Add other necessary fields
-                    //};
 
-                    //SendDataToClient(networkStream, playerLoginData);
 
                 }
                 else
