@@ -50,36 +50,6 @@ class Program
 
         var dbContext = new GameContext();
         OtMap map = LoadMap();
-        //// Load items definitions (if necessary)
-        //OtItems items = new OtItems();
-        //items.Load("items.otb");
-
-        //// Initialize OtMap
-        //OtMap map = new OtMap(items);
-
-        //// Read OTBM file
-        //using (OtFileReader otbmReader = new OtFileReader("Thais_War.otbm"))
-        //{
-        //    map.Load(otbmReader, replaceTiles: true);
-        //}
-
-        //// Iterate through all tiles in the map
-        //foreach (var tile in map.Tiles)
-        //{
-
-        //    //Console.WriteLine($"Tile at {tile.Location}:");
-        //    foreach (var item in tile.Items)
-        //    {
-        //        if (item.Type.Id == 2471)
-        //        {
-        //            Console.WriteLine($"Tile at {tile.Location}");
-        //            Console.WriteLine($" - Item: {item.Type.Id}{item.Type.Name}");
-        //        }
-        //    }
-        //}
-
-
-
 
         // Start the server after reading the OTBM file and loading house items
         SimpleTcpServer server = new SimpleTcpServer(1300, dbContext,map);
