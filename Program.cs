@@ -41,6 +41,30 @@ class Program
         {
             map.Load(otbmReader, replaceTiles: true);
         }
+        
+
+        // Iterate through all tiles in the map
+        foreach (var tile in map.Tiles)
+        {
+            
+            
+            
+            //Console.WriteLine($"Tile at {tile.Location}:");
+            foreach (var item in tile.Items)
+            {
+                Console.WriteLine($"item.Type.BlockPathFind: {item.Type.BlockPathFind}");
+                Console.WriteLine($"item.Type.BlockProjectile {item.Type.BlockProjectile}"); 
+                Console.WriteLine($"Description: {item.Type.Description}");
+                Console.WriteLine($"LookThrough: {item.Type.LookThrough}");
+                Console.WriteLine($"AlwaysOnTop: {item.Type.AlwaysOnTop}");
+                Console.WriteLine($"BlockObject: {item.Type.BlockObject}");
+                Console.WriteLine($"Tile at {tile.Location}");
+                Console.WriteLine($" - Item: {item.Type.Id}:   :{item.Type.Name}");
+
+                
+            }
+        }
+
 
         return map;
     }
@@ -99,31 +123,43 @@ class SimpleTcpServer
 
     private const int BufferSize = 1024;
     public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
+{
+    try
     {
-        try
-        {
-            var filteredMapTiles = FilterMapData(mapData, playerData);
+        var filteredMapTiles = FilterMapData(mapData, playerData);
 
-            var mapDescriptionPacket = new
+        var mapDescriptionPacket = new
+        {
+            Type = "MapDescription",
+            Tiles = filteredMapTiles.Select(tile => new
             {
-                Type = "MapDescription",
-                Tiles = filteredMapTiles.Select(tile => new
+                Location = new { tile.Location.X, tile.Location.Y, tile.Location.Z },
+                Items = tile.Items.Select(item => new
                 {
-                    Location = new { tile.Location.X, tile.Location.Y, tile.Location.Z },
-                    Items = tile.Items.Select(item => new { Id = item.Id, Name = item.Name }).ToList(),
-                    Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
-                }).ToList()
-            };
+                    Id = item.Id,
+                    Name = item.Name,
+                    BlockPathFind = item.Type != null ? item.Type.BlockPathFind : default(bool),
+                    BlockProjectile = item.Type != null ? item.Type.BlockProjectile : default(bool),
+                    Description = item.Type != null ? item.Type.Description : default(string),
+                    LookThrough = item.Type != null ? item.Type.LookThrough : default(bool),
+                    AlwaysOnTop = item.Type != null ? item.Type.AlwaysOnTop : default(bool),
+                    BlockObject = item.Type != null ? item.Type.BlockObject : default(bool)
+                }).ToList(),
 
-            string jsonPacket = JsonConvert.SerializeObject(mapDescriptionPacket);
-            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
-            networkStream.Write(packetBytes, 0, packetBytes.Length);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-        }
+                Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
+            }).ToList()
+        };
+
+        string jsonPacket = JsonConvert.SerializeObject(mapDescriptionPacket);
+        byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+        networkStream.Write(packetBytes, 0, packetBytes.Length);
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+    }
+}
+
 
     public void SendHeartbeatToClient(NetworkStream networkStream)
     {
