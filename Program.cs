@@ -18,7 +18,6 @@ using OpenTibiaCommons.IO;
 using Newtonsoft.Json;
 using System.Drawing;
 using SharpTibiaProxy.Domain;
-using MyGameServer.player;
 using ClientCreature = MyGameServer.player.ClientCreature;
 using Newtonsoft.Json.Linq;
 
@@ -94,18 +93,22 @@ class Program
 }
 
 
-class SimpleTcpServer
+public class SimpleTcpServer
 {
     public List<PlayerGame> Players { get; } = new List<PlayerGame>();
     private GameWorld gameWorld;
+    private PlayerActionProcessor actionProcessor;
     private TcpListener tcpListener;
     private GameContext dbContext;
     private OtMap map;
     public SimpleTcpServer(int port, GameContext dbContext, OtMap map)
     {
+
         tcpListener = new TcpListener(IPAddress.Loopback, port);
         this.dbContext = dbContext;
-        this.map = map;
+        this.map = map;  // Assign the passed map to the class's map field
+        this.gameWorld = new GameWorld(this);
+        actionProcessor = new PlayerActionProcessor(gameWorld);
     }
 
     public void Start()
@@ -123,42 +126,42 @@ class SimpleTcpServer
 
     private const int BufferSize = 1024;
     public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
-{
-    try
     {
-        var filteredMapTiles = FilterMapData(mapData, playerData);
-
-        var mapDescriptionPacket = new
+        try
         {
-            Type = "MapDescription",
-            Tiles = filteredMapTiles.Select(tile => new
+            var filteredMapTiles = FilterMapData(mapData, playerData);
+
+            var mapDescriptionPacket = new
             {
-                Location = new { tile.Location.X, tile.Location.Y, tile.Location.Z },
-                Items = tile.Items.Select(item => new
+                Type = "MapDescription",
+                Tiles = filteredMapTiles.Select(tile => new
                 {
-                    Id = item.Id,
-                    Name = item.Name,
-                    BlockPathFind = item.Type != null ? item.Type.BlockPathFind : default(bool),
-                    BlockProjectile = item.Type != null ? item.Type.BlockProjectile : default(bool),
-                    Description = item.Type != null ? item.Type.Description : default(string),
-                    LookThrough = item.Type != null ? item.Type.LookThrough : default(bool),
-                    AlwaysOnTop = item.Type != null ? item.Type.AlwaysOnTop : default(bool),
-                    BlockObject = item.Type != null ? item.Type.BlockObject : default(bool)
-                }).ToList(),
+                    Location = new { tile.Location.X, tile.Location.Y, tile.Location.Z },
+                    Items = tile.Items.Select(item => new
+                    {
+                        Id = item.Id,
+                        Name = item.Name,
+                        BlockPathFind = item.Type != null ? item.Type.BlockPathFind : default(bool),
+                        BlockProjectile = item.Type != null ? item.Type.BlockProjectile : default(bool),
+                        Description = item.Type != null ? item.Type.Description : default(string),
+                        LookThrough = item.Type != null ? item.Type.LookThrough : default(bool),
+                        AlwaysOnTop = item.Type != null ? item.Type.AlwaysOnTop : default(bool),
+                        BlockObject = item.Type != null ? item.Type.BlockObject : default(bool)
+                    }).ToList(),
 
-                Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
-            }).ToList()
-        };
+                    Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
+                }).ToList()
+            };
 
-        string jsonPacket = JsonConvert.SerializeObject(mapDescriptionPacket);
-        byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
-        networkStream.Write(packetBytes, 0, packetBytes.Length);
+            string jsonPacket = JsonConvert.SerializeObject(mapDescriptionPacket);
+            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+            networkStream.Write(packetBytes, 0, packetBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error: {ex.Message}");
-    }
-}
 
 
     public void SendHeartbeatToClient(NetworkStream networkStream)
@@ -229,59 +232,6 @@ class SimpleTcpServer
         }
 
         return filteredTiles;
-    }
-
-
-
-
-
-
-    private bool IsValidJson(string strInput)
-    {
-        if (string.IsNullOrWhiteSpace(strInput)) { return false; }
-        strInput = strInput.Trim();
-        if ((strInput.StartsWith("{") && strInput.EndsWith("}")) || // For object
-            (strInput.StartsWith("[") && strInput.EndsWith("]"))) // For array
-        {
-            try
-            {
-                var obj = JToken.Parse(strInput);
-                return true;
-            }
-            catch (JsonReaderException jex)
-            {
-                Console.WriteLine(jex.Message);
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-                return false;
-            }
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    private void SendDataInChunks(NetworkStream networkStream, byte[] dataToSend)
-    {
-        try
-        {
-            int bytesSent = 0;
-            while (bytesSent < dataToSend.Length)
-            {
-                int bytesToSend = Math.Min(dataToSend.Length - bytesSent, BufferSize);
-                networkStream.Write(dataToSend, bytesSent, bytesToSend);
-                bytesSent += bytesToSend;
-            }
-            networkStream.Flush();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Error sending data in chunks: " + ex.Message);
-        }
     }
 
     public string SerializePlayerToJson(Player player)
@@ -387,20 +337,11 @@ class SimpleTcpServer
        // OtMap map = Program.LoadMap();
         TcpClient client = (TcpClient)obj;
         NetworkStream networkStream = client.GetStream();
-        
-
         // Create a new PlayerGame object for the connected client
         PlayerGame Playeringame = new PlayerGame(gameWorld);
         Playeringame.NetworkStream = networkStream;
-
         // Add the player to the list of players
         Players.Add(Playeringame); // Assuming 'players' is accessible here
-
-        // Define and initialize player input object here
-        // Replace this with the actual way you receive player input
-       /* PlayerGame playerInput = new PlayerGame();*/ // Create your player input object
-
-
         try
         {
             string authToken = "ExpectedAuthToken";
@@ -425,12 +366,6 @@ class SimpleTcpServer
                     SendDataToClient(networkStream, playerData);
                     SendMapDataToClient(networkStream,this.map, playerData);
                     SendHeartbeatToClient(networkStream);
-
-                    //if(player.LastLogin > player.LastLogout)
-                    //{
-                    //    SendDataToClientInGame(Playeringame, );
-                    //}
-
                     while (true)
                     {
                         string input = ReadPlayerInputFromNetwork(Playeringame);
@@ -438,6 +373,8 @@ class SimpleTcpServer
                         {
                             break; // Exit the loop if the client has disconnected
                         }
+
+                        actionProcessor.ProcessAction(input, Playeringame);
                         // Example of handling movement input
                         if (Playeringame.IsMoveCommand(input))
                         {
@@ -445,15 +382,8 @@ class SimpleTcpServer
 
                             Playeringame.MoveTo(newPlayerPosition);
                         }
-
-                        // Other game logic
-
-                        // Sleep or control frame rate (optional)
                         Thread.Sleep(16); // Sleep for approximately 60 frames per second
                     }
-
-
-
                 }
                 else
                 {
@@ -473,10 +403,15 @@ class SimpleTcpServer
         }
         finally
         {
+            networkStream.Close();
             client.Close();
             Players.Remove(Playeringame);
         }
     }
+
+
+
+
 
     // You should replace this method with your actual input reading mechanism
     private string ReadPlayerInputFromNetwork(PlayerGame playerInGame)

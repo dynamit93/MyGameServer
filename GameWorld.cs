@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace MyGameServer
 {
-    class GameWorld
+    public class GameWorld
     {
         private const int VIEW_RANGE = 100;
         private SimpleTcpServer tcpServer; // Reference to the SimpleTcpServer instance

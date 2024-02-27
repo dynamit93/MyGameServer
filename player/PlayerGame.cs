@@ -11,7 +11,7 @@ using System.Net.Sockets; // Adjust this to the actual namespace where GameWorld
 
 namespace MyGameServer
 {
-    class PlayerGame
+    public class PlayerGame
     {
         private GameWorld gameWorld; // Add a reference to the GameWorld instance
 
@@ -93,25 +93,25 @@ namespace MyGameServer
 
         public Direction GetDirectionFromInput(string input)
         {
-            // Interpret the input string and return the corresponding Direction enum value.
-            // Example implementation:
-            switch (input)
+            // Convert the input to uppercase to ensure the method is case-insensitive
+            string normalizedInput = input.ToUpper();
+
+            switch (normalizedInput)
             {
-                case "MOVE_NORTH":
+                case "NORTH":
                     return Direction.DIRECTION_NORTH;
-                case "MOVE_EAST":
+                case "EAST":
                     return Direction.DIRECTION_EAST;
-                case "MOVE_SOUTH":
+                case "SOUTH":
                     return Direction.DIRECTION_SOUTH;
-                case "MOVE_WEST":
+                case "WEST":
                     return Direction.DIRECTION_WEST;
-
-
-                // Add cases for other directions
+                // Add cases for other directions if necessary
                 default:
-                    return Direction.DIRECTION_NORTH; // Default or throw an exception
+                    throw new ArgumentException("Invalid direction input"); // Throw an exception for invalid input
             }
         }
+
 
         public void InteractWithObject(GameWorldObject gameObject)
         {

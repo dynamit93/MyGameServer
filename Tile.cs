@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace MyGameServer
 {
-    class Tile
+    public class Tile
     {
         public int X { get; set; }
         public int Y { get; set; }
