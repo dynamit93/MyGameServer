@@ -317,17 +317,31 @@ public class SimpleTcpServer
 
     public void SendDataToClientInGame(NetworkStream networkStream, object gameData)
     {
-        string gameDataJson = JsonConvert.SerializeObject(gameData);
+        string gameDataJson;
+
+        // Check if gameData is already a JSON string
+        if (gameData is string)
+        {
+            gameDataJson = (string)gameData;
+        }
+        else
+        {
+            gameDataJson = JsonConvert.SerializeObject(gameData);
+        }
+
         byte[] jsonDataBytes = Encoding.UTF8.GetBytes(gameDataJson);
 
         // Prefix data with length
         byte[] lengthPrefix = BitConverter.GetBytes(jsonDataBytes.Length);
         byte[] dataToSend = new byte[lengthPrefix.Length + jsonDataBytes.Length];
-        lengthPrefix.CopyTo(dataToSend, 2);
+
+        // Copy the length prefix and JSON data into the dataToSend array
+        lengthPrefix.CopyTo(dataToSend, 0); // Start at index 0
         jsonDataBytes.CopyTo(dataToSend, lengthPrefix.Length);
 
         networkStream.Write(dataToSend, 0, dataToSend.Length);
     }
+
 
 
 
@@ -372,7 +386,7 @@ public class SimpleTcpServer
                     // Send necessary data to the client.
                     SendDataToClient(networkStream, playerData);
                     SendMapDataToClient(networkStream, this.map, playerData);
-                    SendHeartbeatToClient(networkStream);
+                    //SendHeartbeatToClient(networkStream);
 
                     // Processing actions from the client.
                     while (true)

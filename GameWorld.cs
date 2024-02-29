@@ -27,6 +27,13 @@ namespace MyGameServer
         {
             player.Position = newPosition; // Update player's position
 
+            // Serialize the movement data for the moving player
+            var playerMovementData = SerializeMovementData(player);
+
+            // Optionally, notify the moving player about the update
+            // This might be necessary if the client needs confirmation or additional data processing
+            tcpServer.SendDataToClientInGame(player.NetworkStream, playerMovementData);
+
             foreach (var otherPlayer in players)
             {
                 if (otherPlayer != player && ShouldNotifyOtherPlayerOfMovement(otherPlayer, player))
@@ -37,6 +44,7 @@ namespace MyGameServer
                 }
             }
         }
+
 
         private bool ShouldNotifyOtherPlayerOfMovement(PlayerGame otherPlayer, PlayerGame movingPlayer)
         {
@@ -65,8 +73,13 @@ namespace MyGameServer
 
         private string SerializeMovementData(PlayerGame player)
         {
-            // Serialize the player's movement data (e.g., new position)
-            return JsonConvert.SerializeObject(new { PlayerId = player.PlayerId, NewPosition = player.Position });
+            // Serialize the player's movement data with an additional type field
+            return JsonConvert.SerializeObject(new
+            {
+                type = "PlayerMove",
+                PlayerId = player.PlayerId,
+                NewPosition = $"{player.Position.X}, {player.Position.Y}"
+            });
         }
 
         // Assuming you have a method to get the tile at a specific position

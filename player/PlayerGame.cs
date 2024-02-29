@@ -65,33 +65,35 @@ namespace MyGameServer
 
         public void HandlePlayerInput(string input)
         {
+
+            string inputtoupper = input.ToUpper();
             // Process player input, e.g., movement commands
-            if (IsMoveCommand(input))
+            if (IsMoveCommand(inputtoupper))
             {
-                Point newPlayerPosition = CalculateNewPosition(Position, GetDirectionFromInput(input));
+                Point newPlayerPosition = CalculateNewPosition(Position, GetDirectionFromInput(inputtoupper));
                 MoveTo(newPlayerPosition);
             }
 
             // Handle other input commands based on your game's design
         }
 
-        public bool IsMoveCommand(string input)
+        public bool IsMoveCommand(string inputtoupper)
         {
             // Assuming the input commands are structured as "MOVE_NORTH", "MOVE_SOUTH", etc.
             // Check if the input starts with "MOVE_" and is followed by a valid direction
-            if (string.IsNullOrEmpty(input))
+            if (string.IsNullOrEmpty(inputtoupper))
             {
                 return false;
             }
 
-            return input == "MOVE_NORTH" ||
-                   input == "MOVE_EAST" ||
-                   input == "MOVE_SOUTH" ||
-                   input == "MOVE_WEST" ||
-                   input == "MOVE_NE" ||
-                   input == "MOVE_NW" ||
-                   input == "MOVE_SE" ||
-                   input == "MOVE_SW";
+            return inputtoupper == "NORTH" ||
+                   inputtoupper == "EAST" ||
+                   inputtoupper == "SOUTH" ||
+                   inputtoupper == "WEST" ||
+                   inputtoupper == "NE" ||
+                   inputtoupper == "NW" ||
+                   inputtoupper == "SE" ||
+                   inputtoupper == "SW";
         }
 
 
