@@ -15,20 +15,20 @@ using MyGameServer;
 using MyGameServer.player;
 using OpenTibiaCommons.Domain;
 using OpenTibiaCommons.IO;
+using Newtonsoft.Json;
+using System.Drawing;
+using SharpTibiaProxy.Domain;
+using ClientCreature = MyGameServer.player.ClientCreature;
+using Newtonsoft.Json.Linq;
 
 class Program
 {
+    //public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
 
 
-
-
-
-    public static void Main(string[] args)
+    public static OtMap LoadMap()
     {
-
-        var dbContext = new GameContext();
-
-        // Load items definitions (if necessary)
+        // Load items definitions
         OtItems items = new OtItems();
         items.Load("items.otb");
 
@@ -36,29 +36,46 @@ class Program
         OtMap map = new OtMap(items);
 
         // Read OTBM file
-        using (OtFileReader otbmReader = new OtFileReader("Thais_War.otbm"))
+        using (OtFileReader otbmReader = new OtFileReader("test.otbm"))
         {
             map.Load(otbmReader, replaceTiles: true);
         }
+        
 
         // Iterate through all tiles in the map
         foreach (var tile in map.Tiles)
         {
-
+            
+            
+            
             //Console.WriteLine($"Tile at {tile.Location}:");
             foreach (var item in tile.Items)
             {
-                if (item.Type.Id == 2471)
-                {
-                    Console.WriteLine($"Tile at {tile.Location}");
-                    Console.WriteLine($" - Item: {item.Type.Id}{item.Type.Name}");
-                }
+                Console.WriteLine($"item.Type.BlockPathFind: {item.Type.BlockPathFind}");
+                Console.WriteLine($"item.Type.BlockProjectile {item.Type.BlockProjectile}"); 
+                Console.WriteLine($"Description: {item.Type.Description}");
+                Console.WriteLine($"LookThrough: {item.Type.LookThrough}");
+                Console.WriteLine($"AlwaysOnTop: {item.Type.AlwaysOnTop}");
+                Console.WriteLine($"BlockObject: {item.Type.BlockObject}");
+                Console.WriteLine($"Tile at {tile.Location}");
+                Console.WriteLine($" - Item: {item.Type.Id}:   :{item.Type.Name}");
+
+                
             }
         }
 
 
+        return map;
+    }
+
+    public static void Main(string[] args)
+    {
+
+        var dbContext = new GameContext();
+        OtMap map = LoadMap();
+
         // Start the server after reading the OTBM file and loading house items
-        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext);
+        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext,map);
         server.Start();
     }
     private static byte[] DecompressBase64ZstdData(string base64CompressedData)
@@ -76,14 +93,22 @@ class Program
 }
 
 
-class SimpleTcpServer
+public class SimpleTcpServer
 {
+    public List<PlayerGame> Players { get; } = new List<PlayerGame>();
+    private GameWorld gameWorld;
+    private PlayerActionProcessor actionProcessor;
     private TcpListener tcpListener;
     private GameContext dbContext;
-    public SimpleTcpServer(int port, GameContext dbContext)
+    private OtMap map;
+    public SimpleTcpServer(int port, GameContext dbContext, OtMap map)
     {
+
         tcpListener = new TcpListener(IPAddress.Loopback, port);
         this.dbContext = dbContext;
+        this.map = map;  // Assign the passed map to the class's map field
+        this.gameWorld = new GameWorld(this);
+        actionProcessor = new PlayerActionProcessor(gameWorld);
     }
 
     public void Start()
@@ -99,41 +124,279 @@ class SimpleTcpServer
         }
     }
 
+    private const int BufferSize = 1024;
+    public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
+    {
+        try
+        {
+            var filteredMapTiles = FilterMapData(mapData, playerData);
+
+            var mapDescriptionPacket = new
+            {
+                Type = "MapDescription",
+                Tiles = filteredMapTiles.Select(tile => new
+                {
+                    Location = new { tile.Location.X, tile.Location.Y, tile.Location.Z },
+                    Items = tile.Items.Select(item => new
+                    {
+                        Id = item.Id,
+                        Name = item.Name,
+                        BlockPathFind = item.Type != null ? item.Type.BlockPathFind : default(bool),
+                        BlockProjectile = item.Type != null ? item.Type.BlockProjectile : default(bool),
+                        Description = item.Type != null ? item.Type.Description : default(string),
+                        LookThrough = item.Type != null ? item.Type.LookThrough : default(bool),
+                        AlwaysOnTop = item.Type != null ? item.Type.AlwaysOnTop : default(bool),
+                        BlockObject = item.Type != null ? item.Type.BlockObject : default(bool)
+                    }).ToList(),
+
+                    Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
+                }).ToList()
+            };
+
+            string jsonPacket = JsonConvert.SerializeObject(mapDescriptionPacket);
+            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+            networkStream.Write(packetBytes, 0, packetBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+
+    public void SendHeartbeatToClient(NetworkStream networkStream)
+    {
+        try
+        {
+            var heartbeatPacket = new
+            {
+                Type = "Heartbeat",
+                Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+            };
+
+            string jsonPacket = JsonConvert.SerializeObject(heartbeatPacket);
+            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+            networkStream.Write(packetBytes, 0, packetBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+
+
+
+    private List<TileData> FilterMapData(OtMap mapData, Player playerData)
+    {
+        var filteredTiles = new List<TileData>();
+
+        // Define the visibility range around the player
+        int rangeX = 20; // Horizontal visibility range
+        int rangeY = 20; // Vertical visibility range
+        int rangeZ = 2;  // Depth visibility range
+
+        // Calculate the bounds based on the player's position
+        int minX = playerData.PosX - rangeX;
+        int maxX = playerData.PosX + rangeX;
+        int minY = playerData.PosY - rangeY;
+        int maxY = playerData.PosY + rangeY;
+        int minZ = Math.Max(playerData.PosZ - rangeZ, 0); // Assuming Z cannot be negative
+        int maxZ = playerData.PosZ + rangeZ;
+
+        foreach (var tile in mapData.Tiles)
+        {
+            if (tile.Location.X >= minX && tile.Location.X <= maxX &&
+                tile.Location.Y >= minY && tile.Location.Y <= maxY &&
+                tile.Location.Z >= minZ && tile.Location.Z <= maxZ)
+            {
+                // Assuming `Tile` has a similar structure to what you described
+                var tileData = new TileData
+                {
+                    Location = new MapLocation
+                    {
+                        X = tile.Location.X,
+                        Y = tile.Location.Y,
+                        Z = tile.Location.Z
+                    },
+                    Ground = tile.Ground != null ? new GroundData { Id = tile.Ground.Type.Id, Name = tile.Ground.Type.Name } : null
+                };
+
+                foreach (var item in tile.Items)
+                {
+                    tileData.Items.Add(new ItemData { Id = item.Type.Id, Name = item.Type.Name });
+                }
+
+                filteredTiles.Add(tileData);
+            }
+        }
+
+        return filteredTiles;
+    }
+
+    public string SerializePlayerToJson(Player player)
+    {
+        return JsonConvert.SerializeObject(player);
+    }
+    private Player FetchPlayerData()
+    {
+        // Implement your logic to fetch player data
+        // For example, you might fetch it from the dbContext based on some criteria
+        return dbContext.Players.FirstOrDefault(); // Example: Fetch the first player
+    }
+    public void SendDataToClient(NetworkStream networkStream, Player playerData)
+    {
+
+
+        CustomPlayer customPlayer = new CustomPlayer
+        {
+            Type = "PlayerLogin",
+            PlayerId = playerData.PlayerId,
+            AccountId = playerData.AccountId,
+            Name = playerData.Name,
+           // Level = playerData.Level,
+            Balance = playerData.Balance,
+            Blessings = playerData.Blessings,
+            Cap = playerData.Cap,
+            Experience = playerData.Experience,
+            GroupId = playerData.GroupId,
+            Health = playerData.Health,
+            HealthMax = playerData.HealthMax,
+            LastLogin = playerData.LastLogin,
+            LastLogout = playerData.LastLogout,
+            LookAddons = playerData.LookAddons,
+            LookBody = playerData.LookBody,
+            LookFeet = playerData.LookFeet,
+            LookHead = playerData.LookHead,
+            LookLegs = playerData.LookLegs,
+            Mana = playerData.Mana,
+            ManaMax = playerData.ManaMax,
+            ManaSpent = playerData.ManaSpent,
+            PosX = playerData.PosX,
+            PosY = playerData.PosY,
+            PosZ = playerData.PosZ,
+            Save = playerData.Save,
+            Sex = playerData.Sex,
+            Level = new ClientSkill("Level", playerData.Level),
+            //MagicLevel = new ClientSkill("Magic Level"), // Populate with actual magic level if available
+            Skills = new Dictionary<string, ClientSkill>
+
+
+
+            {
+                { "SkillAxe", new ClientSkill("Axe Fighting", playerData.SkillAxe) },
+                { "SkillClub", new ClientSkill("Club Fighting", playerData.SkillClub) },
+                // ... add other skills ...
+            }
+        };
+        ClientCreature creature = new ClientCreature
+        {
+            CreatureID = playerData.PlayerId,
+            CreatureName = playerData.Name,
+            
+        };
+        var dataToSendObject = new
+        {
+
+            player = customPlayer,
+            Creature = creature
+        };
+        string json = JsonConvert.SerializeObject(dataToSendObject);
+        byte[] jsonDataBytes = Encoding.UTF8.GetBytes(json);
+
+        // Prefix data with length (excluding the length of the length prefix itself)
+        byte[] lengthPrefix = BitConverter.GetBytes((ushort)jsonDataBytes.Length);
+        byte[] dataToSend = new byte[lengthPrefix.Length + jsonDataBytes.Length];
+        lengthPrefix.CopyTo(dataToSend, 0);
+        jsonDataBytes.CopyTo(dataToSend, lengthPrefix.Length);
+
+        networkStream.Write(dataToSend, 0, dataToSend.Length);
+    }
+
+
+
+    public void SendDataToClientInGame(NetworkStream networkStream, object gameData)
+    {
+        string gameDataJson = JsonConvert.SerializeObject(gameData);
+        byte[] jsonDataBytes = Encoding.UTF8.GetBytes(gameDataJson);
+
+        // Prefix data with length
+        byte[] lengthPrefix = BitConverter.GetBytes(jsonDataBytes.Length);
+        byte[] dataToSend = new byte[lengthPrefix.Length + jsonDataBytes.Length];
+        lengthPrefix.CopyTo(dataToSend, 2);
+        jsonDataBytes.CopyTo(dataToSend, lengthPrefix.Length);
+
+        networkStream.Write(dataToSend, 0, dataToSend.Length);
+    }
+
+
 
 
     private void HandleClient(object obj)
     {
         TcpClient client = (TcpClient)obj;
         NetworkStream networkStream = client.GetStream();
+        PlayerGame Playeringame = new PlayerGame(gameWorld); // Initialize but don't have player-specific data yet
+        Playeringame.NetworkStream = networkStream;
 
         try
         {
-            string authToken = "ExpectedAuthToken"; // Replace with your expected authentication token
+            string authToken = "ExpectedAuthToken";
             byte[] buffer = new byte[1024];
             int bytesRead = networkStream.Read(buffer, 0, buffer.Length);
             string receivedToken = Encoding.UTF8.GetString(buffer, 0, bytesRead);
 
+            Console.WriteLine(receivedToken);
             if (receivedToken == authToken)
             {
                 Console.WriteLine("Client authenticated.");
 
-                // Fetch all players from the database
-                var players = dbContext.Players.ToList();
+                // Assume ProcessLoginRequest validates the player and fetches their data.
+                var (isValidLogin, playerData) = ProcessLoginRequest(networkStream);
 
-                // Create a string with all players' information
-                StringBuilder playersInfo = new StringBuilder();
-                foreach (var player in players)
+                if (isValidLogin && playerData != null)
                 {
-                    playersInfo.AppendLine($"Player: {player.Name}, Level: {player.Level}, Balance: {player.Balance}");
+                    // Now that the player is validated, assign the fetched details to the Playeringame object.
+                    Playeringame.PlayerId = playerData.PlayerId;
+                    Playeringame.Name = playerData.Name;
+                    Playeringame.Health = playerData.Health;
+                    Playeringame.HealthMax = playerData.HealthMax;
+                    Playeringame.Mana = playerData.Mana;
+                    Playeringame.ManaMax = playerData.ManaMax;
+                    Playeringame.Level = playerData.Level;
+
+                    Playeringame.Position = new Point(playerData.PosX, playerData.PosY); // Make sure this is initialized in your player data fetching logic.
+
+                    Players.Add(Playeringame); // Now add the player to the list after all details are set.
+
+                    // Send necessary data to the client.
+                    SendDataToClient(networkStream, playerData);
+                    SendMapDataToClient(networkStream, this.map, playerData);
+                    SendHeartbeatToClient(networkStream);
+
+                    // Processing actions from the client.
+                    while (true)
+                    {
+                        string input = ReadPlayerInputFromNetwork(Playeringame);
+                        if (string.IsNullOrEmpty(input))
+                        {
+                            break; // Exit the loop if the client has disconnected or sent empty input.
+                        }
+
+                        actionProcessor.ProcessAction(input, Playeringame);
+                        if (Playeringame.IsMoveCommand(input))
+                        {
+                            Point newPlayerPosition = Playeringame.CalculateNewPosition(Playeringame.Position, Playeringame.GetDirectionFromInput(input));
+                            Playeringame.MoveTo(newPlayerPosition);
+                        }
+
+                        Thread.Sleep(16); // Sleep to control the loop's execution rate.
+                    }
                 }
-
-                // Log the data being sent to the client
-                Console.WriteLine($"Data server sending to client: {playersInfo}");
-
-                // Send the players' information to the client
-                string responseData = playersInfo.ToString();
-                byte[] responseBytes = Encoding.UTF8.GetBytes(responseData);
-                networkStream.Write(responseBytes, 0, responseBytes.Length);
+                else
+                {
+                    Console.WriteLine("Invalid login credentials or player does not exist.");
+                }
             }
             else
             {
@@ -146,11 +409,56 @@ class SimpleTcpServer
         }
         finally
         {
+            networkStream.Close();
             client.Close();
+            Players.Remove(Playeringame); // Clean up by removing the player from the list.
         }
     }
 
 
+
+
+
+
+    // You should replace this method with your actual input reading mechanism
+    private string ReadPlayerInputFromNetwork(PlayerGame playerInGame)
+    {
+        try
+        {
+            byte[] buffer = new byte[1024];
+            int bytesRead = playerInGame.NetworkStream.Read(buffer, 0, buffer.Length);
+
+            if (bytesRead > 0)
+            {
+                return Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            }
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine($"Error reading player input: {ex.Message}");
+        }
+        catch (SocketException ex)
+        {
+            Console.WriteLine($"Socket exception: {ex.Message}");
+            playerInGame.IsConnected = false;
+            // Additional logic for handling player disconnection
+        }
+
+        return "";
+    }
+
+
+
+    private void SendFramedResponse(NetworkStream networkStream, string response)
+    {
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        byte[] lengthPrefix = BitConverter.GetBytes(responseBytes.Length);
+        byte[] framedResponse = new byte[lengthPrefix.Length + responseBytes.Length];
+        lengthPrefix.CopyTo(framedResponse, 0);
+        responseBytes.CopyTo(framedResponse, lengthPrefix.Length);
+
+        networkStream.Write(framedResponse, 0, framedResponse.Length);
+    }
 
 
 
@@ -164,48 +472,54 @@ class SimpleTcpServer
 
         // Split the login request into username and password
         string[] loginInfo = loginRequest.Split(' ');
+        for (int i = 0; i < loginInfo.Length; i++)
+        {
+            Console.WriteLine(loginInfo[i]);
+        }
+
+
         if (loginInfo.Length != 3 || loginInfo[0] != "LOGIN")
         {
             // Invalid login request format
+            //return false;
             return (false, null);
         }
 
         string username = loginInfo[1];
         string password = loginInfo[2];
 
-        // Validate the username and password against the database
+        Console.WriteLine(username + ":" + password);
+
+
+        // If validation failed or player not found, return false and null
+
         LoginManager loginManager = new LoginManager(dbContext);
+        //LoginManager loginManager = new LoginManager(dbContext);
         var (isValid, playerName) = loginManager.ValidateUserLogin(username, password);
 
         if (isValid)
         {
+            Console.WriteLine("playerName: ", playerName);
             // Retrieve the Player object based on the playerName
             Player player = dbContext.Players.FirstOrDefault(p => p.Name == playerName);
             if (player != null)
             {
+                Console.WriteLine($"{player.Name}");
                 // Return true and the Player object
                 return (true, player);
             }
         }
 
-        // If validation failed or player not found, return false and null
+
+        // Send a response to the client indicating whether the login was successful
+        string response = isValid ? "LOGIN_SUCCESS" : "LOGIN_FAILURE";
+        SendFramedResponse(networkStream, response);
+        Console.WriteLine("LOGIN_SUCCESS " , "LOGIN_FAILURE ",response);
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        networkStream.Write(responseBytes, 0, responseBytes.Length);
+
         return (false, null);
     }
 
-
-
-
-
-
-
-
-
-
-    private bool ValidateCredentials(string username, string password)
-    {
-        // Implement your validation logic here (e.g., check against a database)
-        // Return true if valid, false if not
-        return true; // For demonstration purposes, assuming it's valid
-    }
 
 }

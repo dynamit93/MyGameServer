@@ -28,6 +28,8 @@ namespace MyGameServer
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Ignore the Skills property
+
             // Configure the Player_Items entity
             modelBuilder.Entity<Player_Items>()
                 .HasOne(pi => pi.Player) // Navigation property in Player_Items
