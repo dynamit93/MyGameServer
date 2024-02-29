@@ -87,6 +87,7 @@ namespace MyGameServer.player
             // Example: Identify the target and process the attack
             int targetId = command.targetId;
             Console.WriteLine($"Player {player.Name} is attacking target {targetId}.");
+
             // Process the attack and update game world or player state as necessary
         }
 

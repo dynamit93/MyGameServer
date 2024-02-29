@@ -77,19 +77,58 @@ namespace MyGameServer
 
         public bool IsMoveCommand(string input)
         {
-            // Implement logic to check if the input is a movement command
-            // For example, you might check if input equals "MOVE_UP" or "MOVE_DOWN"
-            // Return true if it's a movement command, otherwise return false
-            return false; // Placeholder return
+            // Assuming the input commands are structured as "MOVE_NORTH", "MOVE_SOUTH", etc.
+            // Check if the input starts with "MOVE_" and is followed by a valid direction
+            if (string.IsNullOrEmpty(input))
+            {
+                return false;
+            }
+
+            return input == "MOVE_NORTH" ||
+                   input == "MOVE_EAST" ||
+                   input == "MOVE_SOUTH" ||
+                   input == "MOVE_WEST" ||
+                   input == "MOVE_NE" ||
+                   input == "MOVE_NW" ||
+                   input == "MOVE_SE" ||
+                   input == "MOVE_SW";
         }
+
 
         public Point CalculateNewPosition(Point currentPosition, Direction direction)
         {
-            // Implement logic to calculate the new position based on the current position and direction
-            // This will depend on how your game world is structured
-            // Return the new position as a Point
-            return currentPosition; // Placeholder return
+            switch (direction)
+            {
+                case Direction.DIRECTION_NORTH:
+                    // Move up, decrease Y
+                    return new Point(currentPosition.X, currentPosition.Y - 1);
+                case Direction.DIRECTION_EAST:
+                    // Move right, increase X
+                    return new Point(currentPosition.X + 1, currentPosition.Y);
+                case Direction.DIRECTION_SOUTH:
+                    // Move down, increase Y
+                    return new Point(currentPosition.X, currentPosition.Y + 1);
+                case Direction.DIRECTION_WEST:
+                    // Move left, decrease X
+                    return new Point(currentPosition.X - 1, currentPosition.Y);
+                case Direction.DIRECTION_NE:
+                    // Move up and right
+                    return new Point(currentPosition.X + 1, currentPosition.Y - 1);
+                case Direction.DIRECTION_NW:
+                    // Move up and left
+                    return new Point(currentPosition.X - 1, currentPosition.Y - 1);
+                case Direction.DIRECTION_SE:
+                    // Move down and right
+                    return new Point(currentPosition.X + 1, currentPosition.Y + 1);
+                case Direction.DIRECTION_SW:
+                    // Move down and left
+                    return new Point(currentPosition.X - 1, currentPosition.Y + 1);
+                default:
+                    // In case of an undefined direction, don't move
+                    return currentPosition;
+            }
         }
+
 
         public Direction GetDirectionFromInput(string input)
         {

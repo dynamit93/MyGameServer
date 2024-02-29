@@ -20,13 +20,13 @@ namespace MyGameServer
         public GameWorld(SimpleTcpServer server)
         {
             tcpServer = server;
-            players = new List<PlayerGame>();
+            players = tcpServer.Players;
         }
 
         public void UpdatePlayerState(PlayerGame player, Point newPosition)
         {
             player.Position = newPosition; // Update player's position
-            var visibleTiles = GetTilesInViewRange(player);
+
             foreach (var otherPlayer in players)
             {
                 if (otherPlayer != player && ShouldNotifyOtherPlayerOfMovement(otherPlayer, player))

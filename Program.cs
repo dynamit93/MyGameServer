@@ -23,7 +23,7 @@ using Newtonsoft.Json.Linq;
 
 class Program
 {
-    public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
+    //public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
 
 
     public static OtMap LoadMap()
@@ -334,14 +334,11 @@ public class SimpleTcpServer
 
     private void HandleClient(object obj)
     {
-       // OtMap map = Program.LoadMap();
         TcpClient client = (TcpClient)obj;
         NetworkStream networkStream = client.GetStream();
-        // Create a new PlayerGame object for the connected client
-        PlayerGame Playeringame = new PlayerGame(gameWorld);
+        PlayerGame Playeringame = new PlayerGame(gameWorld); // Initialize but don't have player-specific data yet
         Playeringame.NetworkStream = networkStream;
-        // Add the player to the list of players
-        Players.Add(Playeringame); // Assuming 'players' is accessible here
+
         try
         {
             string authToken = "ExpectedAuthToken";
@@ -352,45 +349,54 @@ public class SimpleTcpServer
             Console.WriteLine(receivedToken);
             if (receivedToken == authToken)
             {
-
                 Console.WriteLine("Client authenticated.");
 
-                var (isValidLogin, player) = ProcessLoginRequest(networkStream);
+                // Assume ProcessLoginRequest validates the player and fetches their data.
+                var (isValidLogin, playerData) = ProcessLoginRequest(networkStream);
 
-                if (isValidLogin) { 
-                // Example: Fetch the player data (adjust according to your logic)
-                Player playerData = FetchPlayerData(); // Implement this method based on your data retrieval logic
-                Console.WriteLine("playerData: ", playerData.Name);
-                    // Send the player data to the client
+                if (isValidLogin && playerData != null)
+                {
+                    // Now that the player is validated, assign the fetched details to the Playeringame object.
+                    Playeringame.PlayerId = playerData.PlayerId;
+                    Playeringame.Name = playerData.Name;
+                    Playeringame.Health = playerData.Health;
+                    Playeringame.HealthMax = playerData.HealthMax;
+                    Playeringame.Mana = playerData.Mana;
+                    Playeringame.ManaMax = playerData.ManaMax;
+                    Playeringame.Level = playerData.Level;
 
+                    Playeringame.Position = new Point(playerData.PosX, playerData.PosY); // Make sure this is initialized in your player data fetching logic.
+
+                    Players.Add(Playeringame); // Now add the player to the list after all details are set.
+
+                    // Send necessary data to the client.
                     SendDataToClient(networkStream, playerData);
-                    SendMapDataToClient(networkStream,this.map, playerData);
+                    SendMapDataToClient(networkStream, this.map, playerData);
                     SendHeartbeatToClient(networkStream);
+
+                    // Processing actions from the client.
                     while (true)
                     {
                         string input = ReadPlayerInputFromNetwork(Playeringame);
-                        if (input == null || input == "") // Check for empty input, indicating disconnection
+                        if (string.IsNullOrEmpty(input))
                         {
-                            break; // Exit the loop if the client has disconnected
+                            break; // Exit the loop if the client has disconnected or sent empty input.
                         }
 
                         actionProcessor.ProcessAction(input, Playeringame);
-                        // Example of handling movement input
                         if (Playeringame.IsMoveCommand(input))
                         {
                             Point newPlayerPosition = Playeringame.CalculateNewPosition(Playeringame.Position, Playeringame.GetDirectionFromInput(input));
-
                             Playeringame.MoveTo(newPlayerPosition);
                         }
-                        Thread.Sleep(16); // Sleep for approximately 60 frames per second
+
+                        Thread.Sleep(16); // Sleep to control the loop's execution rate.
                     }
                 }
                 else
                 {
-                    Console.WriteLine();
-                    Console.WriteLine("USERNAME OR PASSWORD OR PLAYER DOSE NOT EXIST");
+                    Console.WriteLine("Invalid login credentials or player does not exist.");
                 }
-
             }
             else
             {
@@ -405,9 +411,10 @@ public class SimpleTcpServer
         {
             networkStream.Close();
             client.Close();
-            Players.Remove(Playeringame);
+            Players.Remove(Playeringame); // Clean up by removing the player from the list.
         }
     }
+
 
 
 
