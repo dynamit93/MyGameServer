@@ -78,7 +78,8 @@ namespace MyGameServer
             {
                 type = "PlayerMove",
                 PlayerId = player.PlayerId,
-                NewPosition = $"{player.Position.X}, {player.Position.Y}"
+                NewPosition = $"{player.Position.X}, {player.Position.Y}",
+
             });
         }
 
