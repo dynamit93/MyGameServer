@@ -20,6 +20,7 @@ using System.Drawing;
 using SharpTibiaProxy.Domain;
 using ClientCreature = MyGameServer.player.ClientCreature;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 class Program
 {
@@ -40,27 +41,58 @@ class Program
         {
             map.Load(otbmReader, replaceTiles: true);
         }
-        
+
 
         // Iterate through all tiles in the map
         foreach (var tile in map.Tiles)
         {
-            
-            
-            
+
+
+
             //Console.WriteLine($"Tile at {tile.Location}:");
             foreach (var item in tile.Items)
             {
-                Console.WriteLine($"item.Type.BlockPathFind: {item.Type.BlockPathFind}");
-                Console.WriteLine($"item.Type.BlockProjectile {item.Type.BlockProjectile}"); 
-                Console.WriteLine($"Description: {item.Type.Description}");
-                Console.WriteLine($"LookThrough: {item.Type.LookThrough}");
-                Console.WriteLine($"AlwaysOnTop: {item.Type.AlwaysOnTop}");
-                Console.WriteLine($"BlockObject: {item.Type.BlockObject}");
-                Console.WriteLine($"Tile at {tile.Location}");
-                Console.WriteLine($" - Item: {item.Type.Id}:   :{item.Type.Name}");
+                if (item.Type.Id == 1111)
+                {
+                    Console.WriteLine($"Tile at {tile.Location}:");
+                    // Print each property of OtItemType manually
+                    Console.WriteLine($"   Id: {item.Type.Id}");
+                    Console.WriteLine($"   SpriteId: {item.Type.SpriteId}");
+                    Console.WriteLine($"   GroundSpeed: {item.Type.GroundSpeed}");
+                    Console.WriteLine($"   Group: {item.Type.Group}");
+                    Console.WriteLine($"   AlwaysOnTop: {item.Type.AlwaysOnTop}");
+                    Console.WriteLine($"   AlwaysOnTopOrder: {item.Type.AlwaysOnTopOrder}");
+                    Console.WriteLine($"   HasUseWith: {item.Type.HasUseWith}");
+                    Console.WriteLine($"   MaxReadChars: {item.Type.MaxReadChars}");
+                    Console.WriteLine($"   MaxReadWriteChars: {item.Type.MaxReadWriteChars}");
+                    Console.WriteLine($"   HasHeight: {item.Type.HasHeight}");
+                    Console.WriteLine($"   MinimapColor: {item.Type.MinimapColor}");
+                    Console.WriteLine($"   LookThrough: {item.Type.LookThrough}");
+                    Console.WriteLine($"   LightLevel: {item.Type.LightLevel}");
+                    Console.WriteLine($"   LightColor: {item.Type.LightColor}");
+                    Console.WriteLine($"   IsStackable: {item.Type.IsStackable}");
+                    Console.WriteLine($"   IsReadable: {item.Type.IsReadable}");
+                    Console.WriteLine($"   IsMoveable: {item.Type.IsMoveable}");
+                    Console.WriteLine($"   IsPickupable: {item.Type.IsPickupable}");
+                    Console.WriteLine($"   IsHangable: {item.Type.IsHangable}");
+                    Console.WriteLine($"   IsHorizontal: {item.Type.IsHorizontal}");
+                    Console.WriteLine($"   IsVertical: {item.Type.IsVertical}");
+                    Console.WriteLine($"   IsRotatable: {item.Type.IsRotatable}");
+                    Console.WriteLine($"   BlockObject: {item.Type.BlockObject}");
+                    Console.WriteLine($"   BlockProjectile: {item.Type.BlockProjectile}");
+                    Console.WriteLine($"   BlockPathFind: {item.Type.BlockPathFind}");
+                    Console.WriteLine($"   AllowDistRead: {item.Type.AllowDistRead}");
+                    Console.WriteLine($"   IsAnimation: {item.Type.IsAnimation}");
+                    Console.WriteLine($"   WalkStack: {item.Type.WalkStack}");
+                    Console.WriteLine($"   WareId: {item.Type.WareId}");
+                    Console.WriteLine($"   Name: {item.Type.Name}");
+                    Console.WriteLine($"   Article: {item.Type.Article}");
+                    Console.WriteLine($"   Plural: {item.Type.Plural}");
+                    Console.WriteLine($"   Description: {item.Type.Description}");
+                }
 
-                
+
+
             }
         }
 
@@ -145,8 +177,11 @@ public class SimpleTcpServer
                         BlockProjectile = item.Type != null ? item.Type.BlockProjectile : default(bool),
                         Description = item.Type != null ? item.Type.Description : default(string),
                         LookThrough = item.Type != null ? item.Type.LookThrough : default(bool),
-                        AlwaysOnTop = item.Type != null ? item.Type.AlwaysOnTop : default(bool),
-                        BlockObject = item.Type != null ? item.Type.BlockObject : default(bool)
+                        AlwaysOnTop = item.Type?.AlwaysOnTop ?? false,
+                        AlwaysontopOrder = item.Type != null ? item.Type.AlwaysOnTopOrder : default(int),
+                        BlockObject = item.Type != null ? item.Type.BlockObject : default(bool),
+                        IsMoveable = item.Type != null ? item.Type.IsMoveable : default(bool),
+                        IsPickupable = item.Type != null ? item.Type.IsMoveable: default(bool)
                     }).ToList(),
 
                     Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
@@ -224,7 +259,7 @@ public class SimpleTcpServer
 
                 foreach (var item in tile.Items)
                 {
-                    tileData.Items.Add(new ItemData { Id = item.Type.Id, Name = item.Type.Name });
+                    tileData.Items.Add(new ItemData { Id = item.Type.Id, Name = item.Type.Name, Type = item.Type });
                 }
 
                 filteredTiles.Add(tileData);
