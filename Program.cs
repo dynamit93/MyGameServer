@@ -21,11 +21,16 @@ using SharpTibiaProxy.Domain;
 using ClientCreature = MyGameServer.player.ClientCreature;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
+using MyGameServer;
+using System.Xml.Linq;
 
 class Program
 {
     //public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
 
+
+
+     
 
     public static OtMap LoadMap()
     {
@@ -35,82 +40,47 @@ class Program
 
         // Initialize OtMap
         OtMap map = new OtMap(items);
+        var tileLocations = map.Tiles.Select(t => t.Location.ToIndex()).ToHashSet();
+        string spawnFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test-spawn.xml");
 
-        // Read OTBM file
-        using (OtFileReader otbmReader = new OtFileReader("test.otbm"))
-        {
-            map.Load(otbmReader, replaceTiles: true);
-        }
-
-
-        // Iterate through all tiles in the map
-        foreach (var tile in map.Tiles)
-        {
+        string otbmFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test.otbm");
+        map.Load(otbmFilePath, replaceTiles: true);
 
 
-
-            //Console.WriteLine($"Tile at {tile.Location}:");
-            foreach (var item in tile.Items)
-            {
-                if (item.Type.Id == 1111)
-                {
-                    Console.WriteLine($"Tile at {tile.Location}:");
-                    // Print each property of OtItemType manually
-                    Console.WriteLine($"   Id: {item.Type.Id}");
-                    Console.WriteLine($"   SpriteId: {item.Type.SpriteId}");
-                    Console.WriteLine($"   GroundSpeed: {item.Type.GroundSpeed}");
-                    Console.WriteLine($"   Group: {item.Type.Group}");
-                    Console.WriteLine($"   AlwaysOnTop: {item.Type.AlwaysOnTop}");
-                    Console.WriteLine($"   AlwaysOnTopOrder: {item.Type.AlwaysOnTopOrder}");
-                    Console.WriteLine($"   HasUseWith: {item.Type.HasUseWith}");
-                    Console.WriteLine($"   MaxReadChars: {item.Type.MaxReadChars}");
-                    Console.WriteLine($"   MaxReadWriteChars: {item.Type.MaxReadWriteChars}");
-                    Console.WriteLine($"   HasHeight: {item.Type.HasHeight}");
-                    Console.WriteLine($"   MinimapColor: {item.Type.MinimapColor}");
-                    Console.WriteLine($"   LookThrough: {item.Type.LookThrough}");
-                    Console.WriteLine($"   LightLevel: {item.Type.LightLevel}");
-                    Console.WriteLine($"   LightColor: {item.Type.LightColor}");
-                    Console.WriteLine($"   IsStackable: {item.Type.IsStackable}");
-                    Console.WriteLine($"   IsReadable: {item.Type.IsReadable}");
-                    Console.WriteLine($"   IsMoveable: {item.Type.IsMoveable}");
-                    Console.WriteLine($"   IsPickupable: {item.Type.IsPickupable}");
-                    Console.WriteLine($"   IsHangable: {item.Type.IsHangable}");
-                    Console.WriteLine($"   IsHorizontal: {item.Type.IsHorizontal}");
-                    Console.WriteLine($"   IsVertical: {item.Type.IsVertical}");
-                    Console.WriteLine($"   IsRotatable: {item.Type.IsRotatable}");
-                    Console.WriteLine($"   BlockObject: {item.Type.BlockObject}");
-                    Console.WriteLine($"   BlockProjectile: {item.Type.BlockProjectile}");
-                    Console.WriteLine($"   BlockPathFind: {item.Type.BlockPathFind}");
-                    Console.WriteLine($"   AllowDistRead: {item.Type.AllowDistRead}");
-                    Console.WriteLine($"   IsAnimation: {item.Type.IsAnimation}");
-                    Console.WriteLine($"   WalkStack: {item.Type.WalkStack}");
-                    Console.WriteLine($"   WareId: {item.Type.WareId}");
-                    Console.WriteLine($"   Name: {item.Type.Name}");
-                    Console.WriteLine($"   Article: {item.Type.Article}");
-                    Console.WriteLine($"   Plural: {item.Type.Plural}");
-                    Console.WriteLine($"   Description: {item.Type.Description}");
-                }
-
-
-
-            }
-        }
-
+        map.LoadSpawn(spawnFilePath, tileLocations);
+      
 
         return map;
     }
 
+
+
+
+    //Console.WriteLine(creature.Location.X + spawn.Location.X);
+    //            Console.WriteLine(creature.Location.Y + spawn.Location.Y);
+
     public static void Main(string[] args)
     {
+        LuaScripting luaScripting = new LuaScripting();
+
+        string monsterxmlstring = @"Data\Monster\monster.xml";
+
+        luaScripting.LoadMonsterData(monsterxmlstring);
+
 
         var dbContext = new GameContext();
-        OtMap map = LoadMap();
+        OtMap map = LoadMap();  // LoadMap now also includes spawn loading
 
-        // Start the server after reading the OTBM file and loading house items
-        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext,map);
+
+        // Print details of all creatures
+       // PrintAllCreatureLocations(map);
+
+        // Continue with server startup
+        SimpleTcpServer server = new SimpleTcpServer(1300, dbContext, map);
         server.Start();
     }
-    private static byte[] DecompressBase64ZstdData(string base64CompressedData)
+
+private static byte[] DecompressBase64ZstdData(string base64CompressedData)
     {
         byte[] compressedData = Convert.FromBase64String(base64CompressedData);
 
@@ -156,11 +126,89 @@ public class SimpleTcpServer
         }
     }
 
-    private const int BufferSize = 1024;
-    public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
+
+
+    private List<OtCreature> PrintAllCreatureLocations(OtMap map)
+    {
+        var OtCreaturelist = new List<OtCreature>();
+        foreach (var spawn in map.Spawns)
+        {
+            spawn.GetCreatures();
+            foreach (var creature in spawn.GetCreatures())
+            {
+                Console.WriteLine($"spawn.Location: {spawn.Location}");
+                Console.WriteLine($"spawn.Radius: {spawn.Radius}");
+                string creatureType = creature.Type == CreatureType.NPC ? "NPC" : "Monster";
+                Console.WriteLine($"Creature Id: {creature.Id}, Creature Type: {creatureType}, " +
+                    $"Name: {creature.Name}, Location: {creature.Location}");
+                // Assuming creature.Location and spawn.Location return a struct (e.g., Point, or a custom struct)
+                var newX = creature.Location.X + spawn.Location.X;
+                var newY = creature.Location.Y + spawn.Location.Y;
+
+                // Now, you need to create a new Location with these values
+                // Assuming there's a constructor that takes X and Y values
+                creature.Location = new Location(newX, newY, creature.Location.Z);
+
+                Console.WriteLine(creature.Location);
+                OtCreaturelist.Add(creature);
+            }
+        }
+        return OtCreaturelist;
+    }
+
+    public void SendCreactureToClient(NetworkStream networkStream, OtMap mapData)
     {
         try
         {
+            var filtermapcreacture = PrintAllCreatureLocations(mapData);
+
+            var mapCreacturePacket = new
+            {
+                
+                Type = "CreactureDescription",
+                Creature = filtermapcreacture.Select(creature =>
+                {
+                    bool exists = LuaScripting.AllMonsters.Any(obj => obj.Name.ToLower() == creature.Name);
+                    Debug.WriteLine(creature.Name);
+                    Debug.WriteLine(exists);
+                    if (exists)
+                    {
+                        var creatureBuild = LuaScripting.AllMonsters.SingleOrDefault(monster => monster.Name.ToLower() == creature.Name);
+                        return new
+                        {
+                            type = creature.Type,
+                            id = creature.Id,
+                            name = creature.Name,
+                            looktype = creatureBuild.LookType,
+                            HealthNow = creatureBuild.HealthNow,
+                            HealthMax = creatureBuild.HealthMax,
+                            Location = new { creature.Location.X, creature.Location.Y, creature.Location.Z }
+                        };
+                    }
+                    else return null;
+                }).ToList()
+            };
+
+
+
+            string jsonPacket = JsonConvert.SerializeObject(mapCreacturePacket);
+            byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+            networkStream.Write(packetBytes, 0, packetBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+
+    private const int BufferSize = 1024;
+    public void SendMapDataToClient(NetworkStream networkStream, OtMap mapData, Player playerData)
+    {
+
+        try
+        {
+            
             var filteredMapTiles = FilterMapData(mapData, playerData);
 
             var mapDescriptionPacket = new
@@ -181,7 +229,8 @@ public class SimpleTcpServer
                         AlwaysontopOrder = item.Type != null ? item.Type.AlwaysOnTopOrder : default(int),
                         BlockObject = item.Type != null ? item.Type.BlockObject : default(bool),
                         IsMoveable = item.Type != null ? item.Type.IsMoveable : default(bool),
-                        IsPickupable = item.Type != null ? item.Type.IsMoveable: default(bool)
+                        IsPickupable = item.Type != null ? item.Type.IsMoveable: default(bool),
+
                     }).ToList(),
 
                     Ground = tile.Ground != null ? new { Id = tile.Ground.Id, Name = tile.Ground.Name } : null
@@ -421,6 +470,7 @@ public class SimpleTcpServer
                     // Send necessary data to the client.
                     SendDataToClient(networkStream, playerData);
                     SendMapDataToClient(networkStream, this.map, playerData);
+                    SendCreactureToClient(networkStream, this.map);
                     //SendHeartbeatToClient(networkStream);
 
                     // Processing actions from the client.
