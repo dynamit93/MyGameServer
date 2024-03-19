@@ -142,8 +142,11 @@ public class SimpleTcpServer
                 Console.WriteLine($"Creature Id: {creature.Id}, Creature Type: {creatureType}, " +
                     $"Name: {creature.Name}, Location: {creature.Location}");
                 // Assuming creature.Location and spawn.Location return a struct (e.g., Point, or a custom struct)
-                var newX = creature.Location.X + spawn.Location.X;
-                var newY = creature.Location.Y + spawn.Location.Y;
+                //var newX = creature.Location.X - spawn.Location.X;
+                //var newY = creature.Location.Y - spawn.Location.Y;
+
+                var newX = spawn.Location.X;
+                var newY = spawn.Location.Y;
 
                 // Now, you need to create a new Location with these values
                 // Assuming there's a constructor that takes X and Y values
@@ -168,12 +171,12 @@ public class SimpleTcpServer
                 Type = "CreactureDescription",
                 Creature = filtermapcreacture.Select(creature =>
                 {
-                    bool exists = LuaScripting.AllMonsters.Any(obj => obj.Name.ToLower() == creature.Name);
+                    bool exists = LuaScripting.AllMonsters.Any(obj => obj.Name.ToLower() == creature.Name.ToLower());
                     Debug.WriteLine(creature.Name);
                     Debug.WriteLine(exists);
                     if (exists)
                     {
-                        var creatureBuild = LuaScripting.AllMonsters.SingleOrDefault(monster => monster.Name.ToLower() == creature.Name);
+                        var creatureBuild = LuaScripting.AllMonsters.SingleOrDefault(monster => monster.Name.ToLower() == creature.Name.ToLower());
                         return new
                         {
                             type = creature.Type,
@@ -182,14 +185,18 @@ public class SimpleTcpServer
                             looktype = creatureBuild.LookType,
                             HealthNow = creatureBuild.HealthNow,
                             HealthMax = creatureBuild.HealthMax,
-                            Location = new { creature.Location.X, creature.Location.Y, creature.Location.Z }
+                            
+                            Location = new { creature.Location.X, creature.Location.Y, creature.Location.Z },
+                            
                         };
+                       
                     }
                     else return null;
                 }).ToList()
+                 
             };
 
-
+            
 
             string jsonPacket = JsonConvert.SerializeObject(mapCreacturePacket);
             byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
@@ -373,17 +380,17 @@ public class SimpleTcpServer
                 // ... add other skills ...
             }
         };
-        ClientCreature creature = new ClientCreature
-        {
-            CreatureID = playerData.PlayerId,
-            CreatureName = playerData.Name,
+        //ClientCreature creature = new ClientCreature
+        //{
+        //    CreatureID = playerData.PlayerId,
+        //    CreatureName = playerData.Name,
             
-        };
+        //};
         var dataToSendObject = new
         {
 
             player = customPlayer,
-            Creature = creature
+            //Creature = creature
         };
         string json = JsonConvert.SerializeObject(dataToSendObject);
         byte[] jsonDataBytes = Encoding.UTF8.GetBytes(json);
