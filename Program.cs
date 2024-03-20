@@ -133,7 +133,6 @@ public class SimpleTcpServer
         var OtCreaturelist = new List<OtCreature>();
         foreach (var spawn in map.Spawns)
         {
-            spawn.GetCreatures();
             foreach (var creature in spawn.GetCreatures())
             {
                 Console.WriteLine($"spawn.Location: {spawn.Location}");
@@ -141,23 +140,21 @@ public class SimpleTcpServer
                 string creatureType = creature.Type == CreatureType.NPC ? "NPC" : "Monster";
                 Console.WriteLine($"Creature Id: {creature.Id}, Creature Type: {creatureType}, " +
                     $"Name: {creature.Name}, Location: {creature.Location}");
-                // Assuming creature.Location and spawn.Location return a struct (e.g., Point, or a custom struct)
-                //var newX = creature.Location.X - spawn.Location.X;
-                //var newY = creature.Location.Y - spawn.Location.Y;
 
-                var newX = spawn.Location.X;
-                var newY = spawn.Location.Y;
+                // Correctly adjust the creature's location based on the spawn point
+                var newX = creature.Location.X + spawn.Location.X;
+                var newY = creature.Location.Y + spawn.Location.Y;
 
                 // Now, you need to create a new Location with these values
-                // Assuming there's a constructor that takes X and Y values
                 creature.Location = new Location(newX, newY, creature.Location.Z);
 
-                Console.WriteLine(creature.Location);
+                Console.WriteLine($"Adjusted Creature Location: {creature.Location}");
                 OtCreaturelist.Add(creature);
             }
         }
         return OtCreaturelist;
     }
+
 
     public void SendCreactureToClient(NetworkStream networkStream, OtMap mapData)
     {
