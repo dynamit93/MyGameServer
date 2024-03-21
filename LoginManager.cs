@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Linq;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using MyGameServer.player;
 
@@ -16,50 +16,68 @@ namespace MyGameServer
 
         public (bool success, string playerName) ValidateUserLogin(string username, string password)
         {
+            var stopwatch = new Stopwatch();
+
+            stopwatch.Start();
             try
             {
+                Console.WriteLine("Starting login attempt...");
+
+                // Try to find a matching account by username
+                var account = dbContext.Account
+                                               .AsNoTracking()
+                                               .FirstOrDefault(a => a.Name == username);
 
 
-            // Try to find a matching account by username
-            var account = dbContext.Account.SingleOrDefault(a => a.Name == username);
+
+                stopwatch.Stop();
+                Console.WriteLine($"Time taken for querying account: {stopwatch.Elapsed.TotalSeconds} seconds");
+
                 if (account != null)
                 {
-                    // Validate the password (you should have a proper password hashing and validation logic here)
+                    stopwatch.Restart();
+                    // Validate the password
                     if (ValidatePassword(password, account.Password))
                     {
+                        stopwatch.Stop();
+                        Console.WriteLine($"Time taken for password validation: {stopwatch.Elapsed.TotalSeconds} seconds");
+
+                        stopwatch.Restart();
                         // User login is successful
-                        var player = dbContext.Players.SingleOrDefault(p => p.AccountId == account.Id);
-                        if (player != null)
+                        var playerName = dbContext.Players
+                                                  .AsNoTracking()
+                                                  .Where(p => p.AccountId == account.Id)
+                                                  .Select(p => p.Name)
+                                                  .FirstOrDefault();
+                        stopwatch.Stop();
+                        Console.WriteLine($"Time taken for fetching player name: {stopwatch.Elapsed.TotalSeconds} seconds");
+
+                        if (playerName != null)
                         {
-                            // Return the player's name along with success status
-                            return (true, player.Name);
+                            return (true, playerName);
                         }
                     }
-
                 }
             }
             catch (Exception ex)
             {
-                // Log the exception details for debugging
-                Console.WriteLine($"Error accessing database: {ex.Message}");
-                // Optionally rethrow the exception or handle it as needed
-                return (false, null);
+                stopwatch.Stop();
+                Console.WriteLine($"Error during login: {ex.Message}");
             }
 
-
-            // User login failed or player not found
             return (false, null);
         }
 
-
-        // You should implement a proper password validation/hashing method
         public bool ValidatePassword(string inputPassword, string hashedPassword)
         {
-            // Implement your password validation/hashing logic here
-            // Compare the inputPassword with the hashedPassword securely
-            // Return true if they match, false otherwise
-            // It's recommended to use a secure password hashing library like BCrypt or Argon2
-            return inputPassword == hashedPassword;
+            // Implement your hashing function here
+            return HashPassword(inputPassword) == hashedPassword;
+        }
+
+        private string HashPassword(string password)
+        {
+            // Implement your hashing function here
+            return password; // Placeholder for demonstration
         }
     }
 }

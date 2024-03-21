@@ -16,12 +16,11 @@ namespace MyGameServer
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-
-
             if (!optionsBuilder.IsConfigured)
             {
-                optionsBuilder.UseMySql("server=localhost;database=mmorpg;user=mmorpg;password=00dLW8qbrKNn64DX",
-                    ServerVersion.AutoDetect("server=localhost;database=mmorpg;user=mmorpg;password=00dLW8qbrKNn64DX"));
+                optionsBuilder
+                    .UseMySql("server=localhost;database=mmorpg;user=mmorpg;password=00dLW8qbrKNn64DX",
+                        new MySqlServerVersion(new Version(8, 0, 23)));
             }
         }
 
@@ -36,6 +35,10 @@ namespace MyGameServer
                 .WithMany() // No collection property in Player
                 .HasForeignKey(pi => pi.PlayerId); // Foreign key in Player_Items
 
+            // Define an index on the Name column in the Account table
+            modelBuilder.Entity<Account>()
+                .HasIndex(a => a.Name)
+                .IsUnique();
             // ... Other model configurations ...
         }
     }
@@ -46,7 +49,7 @@ namespace MyGameServer
         {
             var optionsBuilder = new DbContextOptionsBuilder<GameContext>();
             optionsBuilder.UseMySql("server=localhost;database=mmorpg;user=mmorpg;password=00dLW8qbrKNn64DX",
-                ServerVersion.AutoDetect("server=localhost;database=mmorpg;user=mmorpg;password=00dLW8qbrKNn64DX"));
+                new MySqlServerVersion(new Version(8, 0, 23)));
 
             return new GameContext(optionsBuilder.Options);
         }

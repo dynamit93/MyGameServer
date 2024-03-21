@@ -12,6 +12,7 @@ namespace MyGameServer.player
         [Required]
         [MaxLength(100)] // Adjust the max length as needed
         [Column(TypeName = "varchar(100)")]
+
         public string Name { get; set; }
 
         [Required]
