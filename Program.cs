@@ -141,13 +141,19 @@ public class SimpleTcpServer
                 Console.WriteLine($"Creature Id: {creature.Id}, Creature Type: {creatureType}, " +
                     $"Name: {creature.Name}, Location: {creature.Location}");
 
+                var newX = creature.Location.X;
+                var newY = creature.Location.Y;
                 // Correctly adjust the creature's location based on the spawn point
-                var newX = creature.Location.X + spawn.Location.X;
-                var newY = creature.Location.Y + spawn.Location.Y;
+                if (!creature.wasSpawnedBefore)
+                {
+                    newX = creature.Location.X + spawn.Location.X;
+                    newY = creature.Location.Y + spawn.Location.Y;
+                }
+             
 
                 // Now, you need to create a new Location with these values
                 creature.Location = new Location(newX, newY, creature.Location.Z);
-
+                creature.wasSpawnedBefore  = true;
                 Console.WriteLine($"Adjusted Creature Location: {creature.Location}");
                 OtCreaturelist.Add(creature);
             }
