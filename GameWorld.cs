@@ -1,5 +1,6 @@
 ﻿using MyGameServer.player;
 using Newtonsoft.Json;
+using OpenTibiaCommons.Domain;
 using SharpTibiaProxy.Domain;
 using SharpTibiaProxy.Util;
 using System;
@@ -11,19 +12,36 @@ using System.Threading.Tasks;
 
 namespace MyGameServer
 {
+
+    public struct Point3D
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Z { get; set; }
+
+        public Point3D(int x, int y, int z)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+        }
+    }
+
+
     public class GameWorld
     {
         private const int VIEW_RANGE = 100;
         private SimpleTcpServer tcpServer; // Reference to the SimpleTcpServer instance
         private List<PlayerGame> players;
-
-        public GameWorld(SimpleTcpServer server)
+        private OtMap map;
+        public GameWorld(SimpleTcpServer server, OtMap initialMap)
         {
             tcpServer = server;
             players = tcpServer.Players;
+            this.map = initialMap;
         }
 
-        public void UpdatePlayerState(PlayerGame player, Point newPosition)
+        public void UpdatePlayerState(PlayerGame player, Point3D newPosition)
         {
             player.Position = newPosition; // Update player's position
 
@@ -65,7 +83,7 @@ namespace MyGameServer
             }
         }
 
-        private double CalculateDistance(Point p1, Point p2)
+        private double CalculateDistance(Point3D p1, Point3D p2)
         {
             // Implement the distance calculation (e.g., Euclidean distance)
             return Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
@@ -83,13 +101,32 @@ namespace MyGameServer
             });
         }
 
-        // Assuming you have a method to get the tile at a specific position
-        private Tile GetTileAt(Point position)
+        public MyGameServer.Tile ConvertOtTileToMyGameServerTile(OpenTibiaCommons.Domain.OtTile otTile)
         {
-            // Implement logic to retrieve the Tile at a given position
-            // For example, from a two-dimensional array, a list, or a database
-            return null; // Placeholder return
+            if (otTile == null) return null;
+
+            var myTile = new MyGameServer.Tile
+            {
+                // Assuming you have similar properties in your Tile class.
+                // You'll need to adjust the property names and types according to your actual Tile definition.
+                X = otTile.Location.X,
+                Y = otTile.Location.Y,
+                Z = otTile.Location.Z,
+                // Add other property mappings as necessary
+            };
+
+            return myTile;
         }
+
+
+        // Assuming you have a method to get the tile at a specific position
+        public Tile GetTileAt(Point3D position)
+        {
+            Location location = new Location(position.X, position.Y, position.Z);
+            var otTile = map.GetTile(location); // This returns an OtTile
+            return ConvertOtTileToMyGameServerTile(otTile); // Convert and return your Tile type
+        }
+
 
         public List<Tile> GetTilesInViewRange(PlayerGame player)
         {
@@ -100,18 +137,22 @@ namespace MyGameServer
             int maxX = player.Position.X + player.ViewRange;
             int minY = player.Position.Y - player.ViewRange;
             int maxY = player.Position.Y + player.ViewRange;
-
-            for (int x = minX; x <= maxX; x++)
+            int minZ = player.Position.Z - player.ViewRange;
+            int maxZ = player.Position.Z + player.ViewRange;
+            for (int z = minZ; z <= maxZ; z++)
             {
-                for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
                 {
-                    Point tilePosition = new Point(x, y);
-                    if (IsWithinWorldBoundaries(tilePosition))
+                    for (int y = minY; y <= maxY; y++)
                     {
-                        Tile tile = GetTileAt(tilePosition);
-                        if (tile != null)
+                        Point3D tilePosition = new Point3D(x, y, z);
+                        if (IsWithinWorldBoundaries(tilePosition))
                         {
-                            visibleTiles.Add(tile);
+                            Tile tile = GetTileAt(tilePosition);
+                            if (tile != null)
+                            {
+                                visibleTiles.Add(tile);
+                            }
                         }
                     }
                 }
@@ -119,7 +160,7 @@ namespace MyGameServer
             return visibleTiles;
         }
 
-        private bool IsWithinWorldBoundaries(Point position)
+        private bool IsWithinWorldBoundaries(Point3D position)
         {
             // Implement your logic to check if the position is within the game world boundaries
             return true; // Placeholder return

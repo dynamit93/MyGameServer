@@ -62,22 +62,32 @@ namespace MyGameServer.player
         {
             try
             {
-                // Ensure that command.direction is a string before passing it
-                string directionStr = command.direction.ToString(); // Convert dynamic to string explicitly
-
-                // Now, use the string version of direction for further processing
+                string directionStr = command.direction.ToString();
                 Direction direction = player.GetDirectionFromInput(directionStr);
+                Point3D newPosition = player.CalculateNewPosition(player.Position, direction);
 
-                Point newPosition = player.CalculateNewPosition(player.Position, direction);
-                player.MoveTo(newPosition);
-
-                Console.WriteLine($"Moved to {newPosition}");
+                // Check if the new position is walkable
+                if (IsWalkable(newPosition))
+                {
+                    player.MoveTo(newPosition);
+                    Console.WriteLine($"Moved to {newPosition}");
+                }
+                else
+                {
+                    Console.WriteLine("Cannot move to the new position as it's blocked.");
+                }
             }
             catch (Exception ex)
             {
-                // It's good practice to handle potential exceptions, especially when dealing with dynamic types
                 Console.WriteLine($"Error in HandleMove: {ex.Message}");
             }
+        }
+
+        private bool IsWalkable(Point3D position)
+        {
+            // Assuming GameWorld has a method to get a tile at a given position
+            Tile tile = GameWorld.GetTileAt(position);
+            return tile != null && !tile.BlockProjectile;
         }
 
 

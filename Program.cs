@@ -23,6 +23,7 @@ using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using MyGameServer;
 using System.Xml.Linq;
+using Microsoft.EntityFrameworkCore;
 
 class Program
 {
@@ -109,7 +110,7 @@ public class SimpleTcpServer
         tcpListener = new TcpListener(IPAddress.Loopback, port);
         this.dbContext = dbContext;
         this.map = map;  // Assign the passed map to the class's map field
-        this.gameWorld = new GameWorld(this);
+        this.gameWorld = new GameWorld(this,this.map);
         actionProcessor = new PlayerActionProcessor(gameWorld);
     }
 
@@ -117,15 +118,30 @@ public class SimpleTcpServer
     {
         tcpListener.Start();
         Console.WriteLine("Server started. Waiting for connections...");
-
+        // Test the account query when the server starts
+        TestAccountQuery();
         while (true)
         {
+
             TcpClient client = tcpListener.AcceptTcpClient();
             Console.WriteLine("Client connected.");
             ThreadPool.QueueUserWorkItem(HandleClient, client);
         }
     }
 
+    private void TestAccountQuery()
+    {
+        // Assuming dbContext is your GameContext instance
+        var account = dbContext.Account.AsNoTracking().FirstOrDefault(a => a.Name == "TEST");
+        if (account != null)
+        {
+            Console.WriteLine($"Test query found account: {account.Name}");
+        }
+        else
+        {
+            Console.WriteLine("Test query did not find the 'TEST' account.");
+        }
+    }
 
 
     private List<OtCreature> PrintAllCreatureLocations(OtMap map)
@@ -473,7 +489,7 @@ public class SimpleTcpServer
                     Playeringame.ManaMax = playerData.ManaMax;
                     Playeringame.Level = playerData.Level;
 
-                    Playeringame.Position = new Point(playerData.PosX, playerData.PosY); // Make sure this is initialized in your player data fetching logic.
+                    Playeringame.Position = new Point3D(playerData.PosX, playerData.PosY, playerData.PosZ); // Make sure this is initialized in your player data fetching logic.
 
                     Players.Add(Playeringame); // Now add the player to the list after all details are set.
 
@@ -495,7 +511,7 @@ public class SimpleTcpServer
                         actionProcessor.ProcessAction(input, Playeringame);
                         if (Playeringame.IsMoveCommand(input))
                         {
-                            Point newPlayerPosition = Playeringame.CalculateNewPosition(Playeringame.Position, Playeringame.GetDirectionFromInput(input));
+                            Point3D newPlayerPosition = Playeringame.CalculateNewPosition(Playeringame.Position, Playeringame.GetDirectionFromInput(input));
                             Playeringame.MoveTo(newPlayerPosition);
                         }
 

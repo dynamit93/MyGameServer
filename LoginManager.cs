@@ -16,16 +16,17 @@ namespace MyGameServer
 
         public (bool success, string playerName) ValidateUserLogin(string username, string password)
         {
-            var stopwatch = new Stopwatch();
-
-            stopwatch.Start();
+         
             try
             {
                 Console.WriteLine("Starting login attempt...");
 
                 // Try to find a matching account by username
+                var stopwatch = new Stopwatch();
+
+                stopwatch.Start();
                 var account = dbContext.Account
-                                               .AsNoTracking()
+                                               
                                                .FirstOrDefault(a => a.Name == username);
 
 
@@ -61,7 +62,7 @@ namespace MyGameServer
             }
             catch (Exception ex)
             {
-                stopwatch.Stop();
+               
                 Console.WriteLine($"Error during login: {ex.Message}");
             }
 

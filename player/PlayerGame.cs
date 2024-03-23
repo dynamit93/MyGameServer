@@ -1,7 +1,6 @@
 ﻿using SharpTibiaProxy.Domain;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -22,7 +21,7 @@ namespace MyGameServer
 
         public NetworkStream NetworkStream { get; set; }
         public int ViewRange { get; set; }
-        public Point Position { get; set; }
+        public Point3D Position { get; set; }
 
 
             public int AccountId { get; set; }
@@ -70,7 +69,7 @@ namespace MyGameServer
             // Process player input, e.g., movement commands
             if (IsMoveCommand(inputtoupper))
             {
-                Point newPlayerPosition = CalculateNewPosition(Position, GetDirectionFromInput(inputtoupper));
+                Point3D newPlayerPosition = CalculateNewPosition(Position, GetDirectionFromInput(inputtoupper));
                 MoveTo(newPlayerPosition);
             }
 
@@ -97,34 +96,34 @@ namespace MyGameServer
         }
 
 
-        public Point CalculateNewPosition(Point currentPosition, Direction direction)
+        public Point3D CalculateNewPosition(Point3D currentPosition, Direction direction)
         {
             switch (direction)
             {
                 case Direction.DIRECTION_NORTH:
                     // Move up, decrease Y
-                    return new Point(currentPosition.X, currentPosition.Y - 1);
+                    return new Point3D(currentPosition.X, currentPosition.Y - 1, currentPosition.Z);
                 case Direction.DIRECTION_EAST:
                     // Move right, increase X
-                    return new Point(currentPosition.X + 1, currentPosition.Y);
+                    return new Point3D(currentPosition.X + 1, currentPosition.Y, currentPosition.Z);
                 case Direction.DIRECTION_SOUTH:
                     // Move down, increase Y
-                    return new Point(currentPosition.X, currentPosition.Y + 1);
+                    return new Point3D(currentPosition.X, currentPosition.Y + 1, currentPosition.Z);
                 case Direction.DIRECTION_WEST:
                     // Move left, decrease X
-                    return new Point(currentPosition.X - 1, currentPosition.Y);
+                    return new Point3D(currentPosition.X - 1, currentPosition.Y, currentPosition.Z);
                 case Direction.DIRECTION_NE:
                     // Move up and right
-                    return new Point(currentPosition.X + 1, currentPosition.Y - 1);
+                    return new Point3D(currentPosition.X + 1, currentPosition.Y - 1, currentPosition.Z);
                 case Direction.DIRECTION_NW:
                     // Move up and left
-                    return new Point(currentPosition.X - 1, currentPosition.Y - 1);
+                    return new Point3D(currentPosition.X - 1, currentPosition.Y - 1, currentPosition.Z);
                 case Direction.DIRECTION_SE:
                     // Move down and right
-                    return new Point(currentPosition.X + 1, currentPosition.Y + 1);
+                    return new Point3D(currentPosition.X + 1, currentPosition.Y + 1, currentPosition.Z);
                 case Direction.DIRECTION_SW:
                     // Move down and left
-                    return new Point(currentPosition.X - 1, currentPosition.Y + 1);
+                    return new Point3D(currentPosition.X - 1, currentPosition.Y + 1, currentPosition.Z);
                 default:
                     // In case of an undefined direction, don't move
                     return currentPosition;
@@ -159,7 +158,7 @@ namespace MyGameServer
             // Logic for interacting with an in-game object
         }
 
-        public void MoveTo(Point newPosition)
+        public void MoveTo(Point3D newPosition)
         {
             // Update the player's position
             Position = newPosition;

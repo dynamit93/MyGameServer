@@ -15,6 +15,8 @@ namespace MyGameServer
         public int Z { get; set; }
         // Other tile properties...
         public int id { get; set; }
+
+        public bool BlockProjectile { get; set; }
     }
 
 
