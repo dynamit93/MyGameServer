@@ -111,7 +111,7 @@ public class SimpleTcpServer
         this.dbContext = dbContext;
         this.map = map;  // Assign the passed map to the class's map field
         this.gameWorld = new GameWorld(this,this.map);
-        actionProcessor = new PlayerActionProcessor(gameWorld);
+        this.actionProcessor = new PlayerActionProcessor(this.gameWorld, this.FilterMapData,map);
     }
 
     public void Start()
@@ -274,6 +274,10 @@ public class SimpleTcpServer
     }
 
 
+
+        //public void blockedtile(OtMap mapData, Player playerData)
+
+
     public void SendHeartbeatToClient(NetworkStream networkStream)
     {
         try
@@ -297,7 +301,7 @@ public class SimpleTcpServer
 
 
 
-    private List<TileData> FilterMapData(OtMap mapData, Player playerData)
+    public List<TileData> FilterMapData(OtMap mapData, Player playerData)
     {
         var filteredTiles = new List<TileData>();
 
@@ -508,7 +512,7 @@ public class SimpleTcpServer
                             break; // Exit the loop if the client has disconnected or sent empty input.
                         }
 
-                        actionProcessor.ProcessAction(input, Playeringame);
+                        actionProcessor.ProcessAction(input, Playeringame, playerData);
                         if (Playeringame.IsMoveCommand(input))
                         {
                             Point3D newPlayerPosition = Playeringame.CalculateNewPosition(Playeringame.Position, Playeringame.GetDirectionFromInput(input));

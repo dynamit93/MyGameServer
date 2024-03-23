@@ -215,7 +215,18 @@ namespace MyGameServer
             tcpServer.SendDataToClientInGame(recipient.NetworkStream, message);
 
         }
+        public bool IsTileWalkable(Point3D position)
+        {
+            Location location = new Location(position.X, position.Y, position.Z);
+            var otTile = map.GetTile(location);
+            if (otTile == null) return false;
 
+            // Check if the ground or any item on the tile blocks movement
+            bool isGroundBlocking = otTile.Ground != null && otTile.Ground.Type.BlockObject;
+            bool isAnyItemBlocking = otTile.Items.Any(item => item.Type.BlockObject);
+
+            return !isGroundBlocking && !isAnyItemBlocking;
+        }
 
 
     }
