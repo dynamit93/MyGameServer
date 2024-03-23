@@ -85,9 +85,17 @@ namespace MyGameServer.player
 
         private bool IsWalkable(Point3D position)
         {
-            // Assuming GameWorld has a method to get a tile at a given position
             Tile tile = GameWorld.GetTileAt(position);
-            return tile != null && !tile.BlockProjectile;
+            if (tile != null)
+            {
+                Console.WriteLine($"Checking tile at ({position.X}, {position.Y}, {position.Z}) - BlockProjectile: {tile.BlockProjectile}   - Tile id: {tile.id} - TileName {tile.TileName}");
+                return !tile.BlockProjectile;
+            }
+            else
+            {
+                Console.WriteLine($"No tile found at ({position.X}, {position.Y}, {position.Z})");
+                return false;
+            }
         }
 
 

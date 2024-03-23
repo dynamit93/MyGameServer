@@ -17,6 +17,7 @@ namespace MyGameServer
         public int id { get; set; }
 
         public bool BlockProjectile { get; set; }
+        public string TileName { get; set; }
     }
 
 
