@@ -3,14 +3,14 @@ using MyGameServer.player;
 using Newtonsoft.Json;
 using OpenTibiaCommons.Domain;
 using SharpTibiaProxy.Domain;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.Sockets;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
+using System.Timers;
+
 
 namespace MyGameServer
 {
@@ -18,22 +18,34 @@ namespace MyGameServer
     {
         public List<PlayerGame> Players { get; } = new List<PlayerGame>();
         private GameWorld gameWorld;
+        private System.Timers.Timer gameLoopTimer;
         private PlayerActionProcessor actionProcessor;
         private TcpListener tcpListener;
         private GameContext dbContext;
         private OtMap map;
         private Socket listenSocket;
+        private bool isRunning;
+        private Thread gameLoopThread;
 
         public SimpleTcpServer(int port, GameContext dbContext, OtMap map)
         {
             this.dbContext = dbContext;
             this.map = map;
             this.gameWorld = new GameWorld(this, this.map);
+            this.gameWorld.InitializeMonstersFromMap();
             this.actionProcessor = new PlayerActionProcessor(this.gameWorld, this.FilterMapData, map);
 
             listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             listenSocket.Bind(new IPEndPoint(IPAddress.Loopback, port));
             listenSocket.Listen(100); // the parameter here is the backlog size
+
+
+            // Initialize and start the game loop timer
+            gameLoopTimer = new System.Timers.Timer(100); // Run the loop every 100ms (adjust as needed)
+            gameLoopTimer.Elapsed += OnGameLoopTick;
+            gameLoopTimer.AutoReset = true;
+            gameLoopTimer.Enabled = true;
+            isRunning = false;
         }
 
         public void Start()
@@ -41,13 +53,63 @@ namespace MyGameServer
             Console.WriteLine("Server started. Waiting for connections...");
             // Test the account query when the server starts
             TestAccountQuery();
-            while (true)
-            {
+            // Start listening for incoming connections in a separate thread
+            isRunning = true;
+            Thread listenThread = new Thread(ListenForClients);
+            listenThread.Start();
 
-                Socket clientSocket = listenSocket.Accept();
-                Console.WriteLine("Client connected.");
-                ThreadPool.QueueUserWorkItem(HandleClient, clientSocket);
+            // Start the game loop in a separate thread
+            gameLoopThread = new Thread(GameLoop);
+            gameLoopThread.Start();
+
+            Console.WriteLine("Server and game loop have started.");
+        }
+
+        private void ListenForClients()
+        {
+            while (isRunning)
+            {
+                try
+                {
+                    Socket clientSocket = listenSocket.Accept();
+                    Console.WriteLine("Client connected.");
+                    ThreadPool.QueueUserWorkItem(HandleClient, clientSocket);
+                }
+                catch (Exception e)
+                {
+                    if (isRunning) // Ignore socket exceptions after stopping the server
+                    {
+                        Console.WriteLine($"Error accepting client: {e.Message}");
+                    }
+                }
             }
+        }
+
+        private void GameLoop()
+        {
+            while (isRunning)
+            {
+                // Update game world state, handle NPC actions, etc.
+                gameWorld.ScheduledUpdate();
+
+                // For example, update every 100ms
+                Thread.Sleep(100);
+            }
+        }
+
+
+        public void Stop()
+        {
+            // Stop the server and the game loop
+            isRunning = false;
+
+            // Close the listener socket
+            listenSocket.Close();
+
+            // Wait for the game loop thread to finish
+            gameLoopThread.Join();
+
+            Console.WriteLine("Server stopped.");
         }
 
         private void TestAccountQuery()
@@ -65,7 +127,15 @@ namespace MyGameServer
         }
 
 
-        private List<OtCreature> PrintAllCreatureLocations(OtMap map)
+        private void OnGameLoopTick(Object source, ElapsedEventArgs e)
+        {
+            // Call the update method in GameWorld
+            gameWorld.ScheduledUpdate();
+
+            // Any additional periodic updates can be called here
+        }
+
+        public List<OtCreature> PrintAllCreatureLocations(OtMap map)
         {
             var OtCreaturelist = new List<OtCreature>();
             foreach (var spawn in map.Spawns)
@@ -190,6 +260,45 @@ namespace MyGameServer
                 }
             }
         }
+
+        public void SendCreatureUpdateToClient(Socket clientSocket, PlayerGame playerGame)
+        {
+            using (NetworkStream networkStream = new NetworkStream(clientSocket))
+            {
+                try
+                {
+                    var creaturesToUpdate = gameWorld.GetCreaturesInViewRange(playerGame);
+
+                    var creatureUpdatePacket = new
+                    {
+                        Type = "CreatureUpdate",
+                        Creatures = creaturesToUpdate.Select(creature =>
+                        {
+                            // Access the target directly from the creatureTargets dictionary.
+                            var target = gameWorld.creatureTargets.ContainsKey(creature) ? gameWorld.creatureTargets[creature] : null;
+
+                            return new
+                            {
+                                Id = creature.Id,
+                                Name = creature.Name,
+                                Position = new { X = creature.Location.X, Y = creature.Location.Y, Z = creature.Location.Z },
+                                Health = creature.HealthNow, // Assuming HealthNow represents the creature's current health.
+                                Target = target != null ? new { PlayerId = target.PlayerId, Position = target.Position } : null
+                            };
+                        }).ToList()
+                    };
+
+                    string jsonPacket = JsonConvert.SerializeObject(creatureUpdatePacket);
+                    byte[] packetBytes = Encoding.UTF8.GetBytes(jsonPacket);
+                    networkStream.Write(packetBytes, 0, packetBytes.Length);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending creature update to client: {ex.Message}");
+                }
+            }
+        }
+
 
 
 
@@ -429,6 +538,7 @@ namespace MyGameServer
                         SendDataToClient(clientSocket, playerData);
                         SendMapDataToClient(clientSocket, this.map, playerData);
                         SendCreactureToClient(clientSocket, this.map);
+                        SendCreatureUpdateToClient(clientSocket, Playeringame);
                         //SendHeartbeatToClient(networkStream);
 
                         // Processing actions from the client.
@@ -582,6 +692,9 @@ namespace MyGameServer
 
             return (false, null);
         }
+
+
+
     }
 
 }

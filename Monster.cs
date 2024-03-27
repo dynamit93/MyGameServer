@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Xml.Linq;
 
 namespace MyGameServer
@@ -48,6 +49,10 @@ namespace MyGameServer
         // Target Change (simplified for demonstration)
         public int TargetChangeInterval { get; private set; }
         public int TargetChangeChance { get; private set; }
+
+        public Point3D Position { get; set; }
+        public PlayerGame Target { get; set; }
+        public List<Point3D> Path { get; set; } = new List<Point3D>();
 
         public Monster(string xmlPath)
         {
@@ -157,4 +162,7 @@ namespace MyGameServer
         public string Sentence { get; set; }
         // Add more properties as necessary
     }
+
+
+
 }

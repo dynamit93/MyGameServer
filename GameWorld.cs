@@ -30,16 +30,55 @@ namespace MyGameServer
 
     public class GameWorld
     {
+        private Pathfinding pathfinding;
         private const int VIEW_RANGE = 100;
         private SimpleTcpServer tcpServer; // Reference to the SimpleTcpServer instance
         private List<PlayerGame> players;
+        private List<OtCreature> monsters;
         private OtMap map;
+        public Dictionary<OtCreature, PlayerGame> creatureTargets = new Dictionary<OtCreature, PlayerGame>();
+        private Dictionary<OtCreature, List<Point3D>> monsterPaths = new Dictionary<OtCreature, List<Point3D>>();
+
+
         public GameWorld(SimpleTcpServer server, OtMap initialMap)
         {
             tcpServer = server;
             players = tcpServer.Players;
             this.map = initialMap;
+            this.monsters = new List<OtCreature>();
+            this.pathfinding = new Pathfinding(this);
         }
+        public void InitializeMonstersFromMap()
+        {
+            // Initialize monsters from map and possibly set initial targets
+            foreach (var spawn in this.map.Spawns)
+            {
+                foreach (var creature in spawn.GetCreatures())
+                {
+                    if (creature.Type == CreatureType.MONSTER)
+                    {
+                        // Initialize without targets or with default/initial targets
+                        this.monsters.Add(creature);
+                        creatureTargets[creature] = null; // Initialize without a target
+                    }
+                }
+            }
+        }
+
+
+        private void UpdateMonsters()
+        {
+            foreach (var monster in monsters)
+            {
+                if (monster != null)  // Check if the monster is not null
+                {
+                    UpdateMonsterAI();
+                    UpdateMonsterPath(monster);  // Make sure this is efficiently updating the path
+                    ExecuteMonsterMovement(monster);
+                }
+            }
+        }
+
 
         public void UpdatePlayerState(PlayerGame player, Point3D newPosition)
         {
@@ -62,6 +101,99 @@ namespace MyGameServer
                 }
             }
         }
+
+        private void UpdateMonsterPath(OtCreature monster)
+        {
+            var target = creatureTargets[monster];
+            if (target != null)
+            {
+                var monsterPosition = new Point3D(monster.Location.X, monster.Location.Y, monster.Location.Z);
+                var targetPosition = new Point3D(target.Position.X, target.Position.Y, target.Position.Z);
+
+                var path = pathfinding.FindPath(monsterPosition, targetPosition);
+                if (path != null && path.Count > 0)
+                {
+                    monsterPaths[monster] = path;
+                    MoveMonster(monster, path);
+                }
+            }
+        }
+
+
+
+        private void MoveMonster(OtCreature monster, List<Point3D> path)
+        {
+            if (path.Any())
+            {
+                var nextStep = path.First();
+                // Update monster's Location instead of Position
+                monster.Location = new Location(nextStep.X, nextStep.Y, nextStep.Z);
+            }
+        }
+
+        private void ExecuteMonsterMovement(OtCreature monster)
+        {
+            if (monsterPaths.ContainsKey(monster) && monsterPaths[monster].Any())
+            {
+                var nextStep = monsterPaths[monster].First();
+                monster.Location = new Location(nextStep.X, nextStep.Y, nextStep.Z);
+                monsterPaths[monster].RemoveAt(0);
+
+                NotifyClientsOfMonsterMovement(monster);
+            }
+        }
+
+
+        private void NotifyClientsOfMonsterMovement(OtCreature monster)
+        {
+            // Retrieve the target from the creatureTargets dictionary
+            var target = creatureTargets.TryGetValue(monster, out PlayerGame targetPlayer) ? targetPlayer : null;
+
+            // Retrieve the path from the monsterPaths dictionary
+            if (monsterPaths.TryGetValue(monster, out List<Point3D> path))
+            {
+                Console.WriteLine($"{monster.Name} (ID: {monster.Id}) moved to location ({monster.Location.X}, {monster.Location.Y}, {monster.Location.Z}).");
+                Console.WriteLine("Path:");
+                foreach (var step in path)
+                {
+                    Console.WriteLine($"Step to ({step.X}, {step.Y}, {step.Z})");
+                }
+            }
+
+            // Now, log the target information
+            if (target != null)
+            {
+                Console.WriteLine($"Current target for {monster.Name} is {target.Name} at location ({target.Position.X}, {target.Position.Y}, {target.Position.Z}).");
+            }
+            else
+            {
+                Console.WriteLine($"{monster.Name} has no current target.");
+            }
+
+            // This method should ideally also involve sending the relevant monster and target information to clients
+            // For example, if you're tracking client connections or sessions, you'd send an update message here
+        }
+
+
+
+        // In your Monster AI routine:
+        private void UpdateMonsterAI()
+        {
+            // Basic AI loop to assign or update targets for each monster
+            foreach (var monster in monsters)
+            {
+                var target = FindTargetForMonster(monster); // Implement this method based on your AI logic
+                creatureTargets[monster] = target;
+            }
+        }
+
+        private PlayerGame FindTargetForMonster(OtCreature monster)
+        {
+            // Implement logic to find the nearest or most suitable PlayerGame target for the monster
+            // Placeholder: return the first player or any specific logic you prefer
+            return players.FirstOrDefault();
+        }
+
 
 
         private bool ShouldNotifyOtherPlayerOfMovement(PlayerGame otherPlayer, PlayerGame movingPlayer)
@@ -101,11 +233,11 @@ namespace MyGameServer
             });
         }
 
-        public MyGameServer.Tile ConvertOtTileToMyGameServerTile(OpenTibiaCommons.Domain.OtTile otTile)
+        public Tile ConvertOtTileToMyGameServerTile(OtTile otTile)
         {
             if (otTile == null) return null;
 
-            var myTile = new MyGameServer.Tile
+            var myTile = new Tile
             {
                 // Assuming you have similar properties in your Tile class.
                 // You'll need to adjust the property names and types according to your actual Tile definition.
@@ -118,6 +250,36 @@ namespace MyGameServer
             return myTile;
         }
 
+        public List<OtCreature> GetCreaturesInViewRange(PlayerGame playerGame)
+        {
+            List<OtCreature> creaturesInView = new List<OtCreature>();
+
+            // Define the visibility range around the player
+            int rangeX = 20; // Horizontal visibility range
+            int rangeY = 20; // Vertical visibility range
+            int rangeZ = 2;  // Depth visibility range
+
+            // Calculate the bounds based on the player's position
+            int minX = playerGame.Position.X - rangeX;
+            int maxX = playerGame.Position.X + rangeX;
+            int minY = playerGame.Position.Y - rangeY;
+            int maxY = playerGame.Position.Y + rangeY;
+            int minZ = Math.Max(playerGame.Position.Z - rangeZ, 0);
+            int maxZ = playerGame.Position.Z + rangeZ;
+
+            // Iterate through all creatures and check if they are within the view range
+            foreach (var creature in monsters) // Assuming 'monsters' is your List<OtCreature>
+            {
+                if (creature.Location.X >= minX && creature.Location.X <= maxX &&
+                    creature.Location.Y >= minY && creature.Location.Y <= maxY &&
+                    creature.Location.Z >= minZ && creature.Location.Z <= maxZ)
+                {
+                    creaturesInView.Add(creature);
+                }
+            }
+
+            return creaturesInView;
+        }
 
         // Assuming you have a method to get the tile at a specific position
         public Tile GetTileAt(Point3D position)
@@ -194,6 +356,7 @@ namespace MyGameServer
         public void ScheduledUpdate()
         {
             UpdateWorldState();
+            UpdateMonsters();
             // Any other regular updates
         }
 

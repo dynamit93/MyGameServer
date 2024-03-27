@@ -27,11 +27,7 @@ using Microsoft.EntityFrameworkCore;
 
 class Program
 {
-    //public static List<PlayerGame> players = new List<PlayerGame>(); // Declare and initialize the players list
-
-
-
-     
+    
 
     public static OtMap LoadMap()
     {
@@ -55,11 +51,6 @@ class Program
     }
 
 
-
-
-    //Console.WriteLine(creature.Location.X + spawn.Location.X);
-    //            Console.WriteLine(creature.Location.Y + spawn.Location.Y);
-
     public static void Main(string[] args)
     {
         LuaScripting luaScripting = new LuaScripting();
@@ -71,10 +62,6 @@ class Program
 
         var dbContext = new GameContext();
         OtMap map = LoadMap();  // LoadMap now also includes spawn loading
-
-
-        // Print details of all creatures
-       // PrintAllCreatureLocations(map);
 
         // Continue with server startup
         SimpleTcpServer server = new SimpleTcpServer(1300, dbContext, map);
